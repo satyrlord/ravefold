@@ -14,3 +14,10 @@ tmp/
 
 # Local npm dependencies.
 /node_modules/
+
+# Generated application and verification files.
+/dist/
+/.impeccable/review/
+/test-results/
+/playwright-report/
+/debug.log
