@@ -1,92 +1,117 @@
 # RaveFold product slices
 
-Status: Draft specifications. Application implementation has not started.
+Status: Spec-001 implementation has user approval. Verification is in progress.
+Subsequent specifications stay drafts.
 
 ## Authority and review boundary
 
-[PRODUCT.md](../../PRODUCT.md) owns approved product requirements.
-[The plan](../plan.md) owns delivery stages, technical proposals and evidence
-targets. Each specification below owns one user outcome and its acceptance
-checks. Proposed behavior is not a new product approval.
+[PRODUCT.md](../../PRODUCT.md) gives the product requirements with user
+approval. [The plan](../plan.md) gives delivery stages, technical proposals and
+evidence targets. Each specification below gives one user result and its
+acceptance checks. Proposed behavior does not have new product approval.
 
-The spec-001 menu scope expansion has user approval. Its interview is complete.
-Do not start an interview for another specification without express user
-approval. An answer for spec-001 does not approve later specifications. This
-split does not authorize implementation.
+The increase in spec-001 menu scope has user approval. Its interview is
+completed. Do not start an interview for a different specification without
+explicit user approval. An answer for spec-001 does not give approval for
+subsequent specifications. The user gave approval for implementation of spec-001
+only.
+
+## Terms
+
+- A product slice contains the work necessary for one usable product result.
+- An acceptance check shows if a result agrees with a requirement.
+- A contract gives the data or behavior that components share.
+- A fixture is test input with known expected results.
+- Metadata is information about other data.
+- A manifest is a file with sample metadata and preparation state.
+- A corpus is a set of audio samples for tests.
+- Persistence saves data so that it stays after a session ends.
+- Validation compares data with specified rules. A valid file passes these
+  checks.
+- A file hash is a value calculated from file bytes to detect changes.
+- A buffer holds data in memory while the application operates.
 
 ## Slice order
 
-Each slice includes the interface, logic and storage necessary for its outcome.
-Dependencies identify earlier outcomes, not separate technical layers. Test each
-slice through its user flow as well as its pure logic.
+Each slice includes the interface, logic and storage necessary for its result.
+Dependencies identify earlier results, not different technical layers. Do tests
+of each slice through its user flow. Also do tests of its logic independently.
 
-| Specification                           | User outcome                                           | Depends on                         | Interview      |
-| --------------------------------------- | ------------------------------------------------------ | ---------------------------------- | -------------- |
-| [001](spec-001-select-folders.md)       | Use the full main menu and enter the tracker           | M0 entry contracts, M1 UI evidence | Complete       |
-| [002](spec-002-find-a-sample.md)        | Find, tag and audition a source sample                 | 001                                | Not authorized |
-| [003](spec-003-use-compatible-audio.md) | Make compatible audio ready for arrangement            | 002, M1 analysis evidence          | Not authorized |
-| [004](spec-004-prepare-a-sample.md)     | Prepare a sample at the supported tempo and key        | 003, M1 conversion evidence        | Not authorized |
-| [005](spec-005-review-a-sample.md)      | Resolve an uncertain sample or select a usable section | 003, 004                           | Not authorized |
-| [006](spec-006-arrange-and-play.md)     | Place ready clips and play a short arrangement         | 003, M1 playback evidence          | Not authorized |
-| [007](spec-007-edit-sections.md)        | Move, copy, repeat and remove song sections            | 006                                | Not authorized |
-| [008](spec-008-mix-tracks.md)           | Adjust and hear a basic mix                            | 006                                | Not authorized |
-| [009](spec-009-save-and-reopen.md)      | Save a project and reopen available clips              | 006                                | Not authorized |
-| [010](spec-010-recover-work.md)         | Recover unsaved arrangement work                       | 009                                | Not authorized |
-| [011](spec-011-render-song.md)          | Render the mix to a selected folder                    | 008, 009                           | Not authorized |
-| [012](spec-012-change-appearance.md)    | Keep themes stable during tracker use                  | 001, 002, 006                      | Not authorized |
+| Specification                           | User outcome                                           | Depends on                         | Interview   |
+| --------------------------------------- | ------------------------------------------------------ | ---------------------------------- | ----------- |
+| [001](spec-001-select-folders.md)       | Use the full main menu and enter the tracker           | M0 entry contracts, M1 UI evidence | Completed   |
+| [002](spec-002-find-a-sample.md)        | Find, tag and audition a source sample                 | 001                                | No approval |
+| [003](spec-003-use-compatible-audio.md) | Make compatible audio ready for arrangement            | 002, M1 analysis evidence          | No approval |
+| [004](spec-004-prepare-a-sample.md)     | Prepare a sample at the supported tempo and key        | 003, M1 conversion evidence        | No approval |
+| [005](spec-005-review-a-sample.md)      | Resolve an uncertain sample or select a usable section | 003, 004                           | No approval |
+| [006](spec-006-arrange-and-play.md)     | Place ready clips and play a short arrangement         | 003, M1 playback evidence          | No approval |
+| [007](spec-007-edit-sections.md)        | Move, copy, repeat and remove song sections            | 006                                | No approval |
+| [008](spec-008-mix-tracks.md)           | Adjust and hear a basic mix                            | 006                                | No approval |
+| [009](spec-009-save-and-reopen.md)      | Save a project and reopen available clips              | 006                                | No approval |
+| [010](spec-010-recover-work.md)         | Recover unsaved arrangement work                       | 009                                | No approval |
+| [011](spec-011-render-song.md)          | Render the mix to a selected folder                    | 008, 009                           | No approval |
+| [012](spec-012-change-appearance.md)    | Keep themes stable during tracker use                  | 001, 002, 006                      | No approval |
 
-The order is a dependency map. It does not permit a later interview. Slices 004
-and 005 can follow the initial arrangement slice once its inputs are ready.
-Slice 001 delivers the complete menu and appearance system after M0/M1 evidence.
-Slice 012 applies that system to tracker flows and tests playback continuity.
-Project-read fixtures come from M0. Slice 001 does not depend on later writers.
+The order shows dependencies. It does not give approval for a subsequent
+interview. Slices 004 and 005 can follow the initial arrangement slice after its
+inputs are ready.
 
-## Rules inherited by every slice
+Slice 001 supplies the full menu and appearance system after M0/M1 evidence.
+Slice 012 applies that system to tracker flows and includes tests of playback
+continuity. M0 supplies fixtures for project reading. Slice 001 does not depend
+on subsequent components that write projects.
 
-- Keep the product at 180 BPM and C minor. Apply all approved sample classes.
+## Rules inherited by each slice
+
+- Keep the product at 180 BPM and C minor. Apply all sample classes with user
+  approval.
 - Accept WAV samples only. Export supports WAV and MP3. MP3 is not a sample
   format.
 - Supply no samples or demo songs. OG project import is excluded permanently.
-  Recording, synthesis and automation are outside the first release.
-- Use the selected sample folder for all persistent library audio. Never delete
+  The first release does not include recording, synthesis or automation.
+- Use the selected sample folder for all persistent library audio. Do not delete
   or change existing audio, including partial files and files made by the app.
-- Add new audio only at new paths. Manifests can change or be deleted. Neither
-  operation gives permission to change audio files.
-- Keep settings and metadata-only recovery in the selected Documents subfolder.
-  Browser persistence contains folder-access references only.
-- Project files contain arrangement data and sample paths, with no audio. Each
-  rendered song requires a user-selected destination folder.
-- Entry requires a valid sample folder and a writable settings folder. Missing
-  individual project samples use the approved red bubbles after folder setup
-  succeeds.
+- Add new audio only at new paths. Manifests can change or be deleted. These
+  operations do not give permission to change audio files.
+- Keep settings and recovery files with metadata only in the selected Documents
+  subfolder. Browser storage contains folder-access references only.
+- Project files contain arrangement data and sample paths, with no audio. A
+  destination folder selected by the user is necessary for each rendered song.
+- A valid sample folder and a writable settings folder are necessary for entry.
+  Red bubbles identify missing individual project samples after successful
+  folder setup.
 - Support desktop keyboard and pointer use. Official browser support is limited
-  to Chromium. Missing capabilities must cause controlled states, not errors.
+  to Chromium. The application must handle unavailable capabilities without
+  errors.
 - Use tooltips as the only help. Give controls accessible names and focus
   states. Errors, progress and required status messages are functional
   information.
-- Apply accessibility to each slice. Do not defer keyboard use to slice 012.
-- Use the required typed stack and six reference skins. The plan and private
-  technology record give their implementation details.
+- Apply accessibility to each slice. Give keyboard support before slice 012.
+- Use the necessary programming language, framework, interface library and six
+  reference skins. The plan and private technology record give their
+  implementation details.
 
 ## Evidence and acceptance
 
-Acceptance IDs use the form `S001-AC01`. Keep each ID with its owning slice. The
-checks describe future evidence. No application check has run.
+Acceptance IDs use the form `S001-AC01`. Keep each ID with the slice that gives
+it. Record completed evidence and remaining limits with the owning slice.
 
-M0 defines the corpus and acceptance criteria for product-owner approval. M1
-supplies measurements before the full workspace implementation. The split does
-not bypass either stage. Browser versions, capacity, detector confidence and
-processing tools still need their recorded evidence and decisions.
+M0 gives the corpus and acceptance criteria for approval by the product owner.
+M1 supplies measurements before implementation of the full workspace. The
+specification division does not bypass either stage. Recorded evidence and
+decisions are necessary for browser versions, capacity, detector confidence and
+processing tools.
 
 Use generated signals or material with distribution permission in public tests.
 Keep private source fixtures out of the application and public test assets.
-Compare file hashes when testing audio protection. Audit persistent writes for
-each flow that touches storage.
+Compare file hashes during tests of audio protection. Examine persistent writes
+for each flow that uses storage.
 
-Browser tests belong only in `quality:full`, and only for UI changes. Add this
-gate with the first real browser suite. It must include quick checks, a build
-and headless tests of that build. Documentation changes use `quality:quick` and
-`git diff --check`. These checks do not prove browser or audio behavior.
+Browser tests belong only in `quality:full`, and only for user interface (UI)
+changes. Add this gate with the first real browser suite. It must include quick
+checks, a build and browser tests of that build without windows on the screen.
+Documentation changes use `quality:quick` and `git diff --check`. These checks
+do not prove browser or audio behavior.
 
 ## Coverage and shared evidence
 
@@ -109,5 +134,5 @@ and headless tests of that build. Documentation changes use `quality:quick` and
 | Corpus, numerical criteria and tool feasibility        | M0 and M1 in the plan  |
 | Combined load, production hosting and release evidence | M5 in the plan         |
 
-Each later specification lists its open choices. These are records for a future
-review, not questions for the current session.
+Each subsequent specification gives its open choices. These are records for a
+future review. They are not questions for the current session.
