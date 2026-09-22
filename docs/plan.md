@@ -17,8 +17,8 @@ or a selected section of that file. A clip is a timed use of a sample on a
 track. An arrangement gives the position and duration of each clip.
 
 Keep the simple composition process from OG. Add undo, sound search, background
-import, clear waveforms and portable projects. A portable project contains the
-data and audio necessary to open it on a different computer.
+import, clear waveforms and project files with sample-path references. A project
+file contains arrangement data and paths, with no audio data.
 
 The first-release task has user approval: arrange and export tracks. Users
 import samples, edit clips and adjust a basic mix. They can save and reopen
@@ -42,7 +42,7 @@ contains source descriptions and library measurements.
 | Play, pause, stop, seek, loop region, musical snap and timeline zoom                                               |
 | Track gain, pan, mute, solo and meters. Master gain and clipping indication.                                       |
 | Background import preparation, review and retry                                                                    |
-| Autosave, portable project archive, stereo WAV export and all six skins                                            |
+| Project save and reopen, missing-sample indicators, stereo WAV export and all six skins                            |
 
 Do not add variable project tempo, a key selector, plug-in hosting or a full
 piano-roll editor to this release. The fixed tempo and key are product features.
@@ -121,6 +121,17 @@ Do not apply pitch shifting to these loops. Tuned percussion uses the tonal
 rules.
 
 ## 3. Workspace and interaction
+
+Keep the user in the main menu until a valid sample folder is available. Use a
+setup window for folder selection. Cancellation, denied access or an invalid
+folder must keep the menu and setup controls usable. Do not start the tracker or
+editor without a valid folder.
+
+If access to the sample folder is lost, return to the folder requirement. Keep
+the project state for recovery. Missing files within an accessible folder do not
+prevent project loading or editing. Show a red bubble at each missing sample's
+clip position in the tracker. Give each bubble a text label that identifies the
+missing sample.
 
 Use a composition workspace with fixed panels. The arranger is the primary panel
 for clip positions. The library and inspector support this panel. Do not move
@@ -233,24 +244,25 @@ flowchart LR
   UI[Workspace and material skins] --> Commands[Project commands and undo]
   Commands --> Project[Versioned musical project]
   Project --> Engine[Audio engine and scheduler]
-  Files[User-selected files] --> Queue[Saved import queue]
+  Folder[User-selected sample folder] --> Queue[Manifest import queue]
   Queue --> Worker[Analysis and DSP worker]
-  Worker --> Store[Prepared assets and metadata]
+  Worker --> Store[New audio files and manifests in sample folder]
+  Folder --> Engine
   Store --> Engine
-  Project --> Save[Autosave and portable archive]
-  Store --> Save
+  Project --> Save[Project metadata and sample paths only]
   Project --> Export[Offline mix and WAV encoder]
   Store --> Export
+  Export --> Destination[User-selected render destination]
 ```
 
-| Directory                | Function                                                                      |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| `domain/`                | Pure project model, ticks, clip edits, command history and schema validation  |
-| `audio/`                 | Audio graph, scheduling by absolute time, transport, preview and render graph |
-| `import/` and `workers/` | File checks, analysis, conversion, queue and cancellation                     |
-| `storage/`               | IndexedDB metadata, OPFS files, recovery, archive import and archive export   |
-| `ui/` and `skins/`       | Component controls, virtualized library and timeline, and theme adapter       |
-| `catalog/`               | Source manifest, categories, stereo pairs, corrections and source history     |
+| Directory                | Function                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| `domain/`                | Pure project model, ticks, clip edits, command history and schema validation   |
+| `audio/`                 | Audio graph, scheduling by absolute time, transport, preview and render graph  |
+| `import/` and `workers/` | File checks, analysis, conversion, queue and cancellation                      |
+| `storage/`               | Folder permissions, manifests, project paths, recovery and output destinations |
+| `ui/` and `skins/`       | Component controls, virtualized library and timeline, and theme adapter        |
+| `catalog/`               | Source manifest, categories, stereo pairs, corrections and source history      |
 
 Start with Web Audio buffer sources and native gain and pan nodes. Use
 `AudioContext.currentTime` as the scheduling clock. Measure an initial scheduler
@@ -298,10 +310,26 @@ differences, unusual boundaries and stereo pairs before a full library import.
 Keep counts, filenames, methods and measurements in
 [private research](research/local-research.md#supplied-sample-library).
 
-The browser cannot open local folders automatically. Let the user select files
-and, where supported, folders. Also support selection of multiple files and
-portable archives. A local catalog command can read `APP_INSTALL_DIR` and
-`SAMPLES_DIR` from the ignored `.env.local` during development.
+Use the sample-source requirements in [PRODUCT.md](../PRODUCT.md) for setup.
+Open a setup window for initial sample-folder selection. Start library discovery
+only after the user selects a folder. Do not ship a sample pack or offer a demo
+sample download. The application uses the selected sample folder exclusively for
+library audio.
+
+The browser cannot open local folders automatically. Keep the setup window
+usable after cancellation or denied access. If folder selection is unavailable,
+give a clear capability message without an application error. Keep the main menu
+accessible when the editor cannot start. Check folder access before library
+operations. The folder-validity criteria require a separate decision.
+
+Add new samples and manifest files only inside the selected sample folder.
+Manifests contain sample metadata and processing state. The application can
+change or delete manifests. It must not delete, overwrite, replace or truncate
+any existing audio file. This protection includes source, prepared, partial and
+unused audio files.
+
+A local catalog command can read `OG_INSTALL_DIR` and `SAMPLES_DIR` from the
+ignored `.env.local` during development.
 
 Do not copy these values into client environment variables, logs, documents,
 manifests, archives or browser output. Store only relative paths and source IDs
@@ -318,8 +346,12 @@ selected -> queued -> decoding -> analyzing -> transforming -> validating -> rea
                                   |                              |
                                   +-> needs-review <-------------+
 Any active phase -> failed or cancelled
-Interrupted jobs -> queued on reopen, after a check of stored input
+Interrupted jobs -> queued after folder access and input checks
 ```
+
+The preparation steps use audio in the selected sample folder. Runtime buffers
+can hold audio while the application operates. Do not persist these buffers
+outside that folder.
 
 1. Validate the file type, byte size and supported format. Calculate a hash from
    the source bytes. The first release supports WAV PCM16/24 and float32, with
@@ -327,10 +359,10 @@ Interrupted jobs -> queued on reopen, after a check of stored input
    add other codecs. Initial recommended limits per file are five minutes of
    decoded audio and 100 MiB of input. Give a clear error for a file above these
    limits.
-2. Save the source file unchanged. Save a durable job record before audio
-   preparation. Parse the supported WAV formats in the Worker. Use a decoder
-   adapter with resource limits for other codecs. Do not assume that a Worker
-   has `decodeAudioData`.
+2. Read the source file without changing it. Save the job record in a manifest
+   before audio preparation. Parse the supported WAV formats in the Worker. Use
+   a decoder adapter with resource limits for other codecs. Do not assume that a
+   Worker has `decodeAudioData`.
 3. Analyze BPM, phrase boundaries, tuning, root, mode and tonal class. Validate
    declared metadata first. Do a test with a labeled audio corpus before you
    select a detector and confidence thresholds. A corpus is the collection of
@@ -349,16 +381,17 @@ Interrupted jobs -> queued on reopen, after a check of stored input
    output hash and measurements. A derivative is an audio file that results from
    this preparation. Set `ready` status only for a complete derivative that
    passes validation.
-7. Write the complete derivative before its metadata transaction sets `ready`
-   status. Do not show partial output as a usable asset in the catalog or
-   arranger. Keep incomplete files for recovery, or remove them in a safe
-   cleanup operation.
+7. Write each derivative to a new file inside the selected sample folder.
+   Validate the complete file before its manifest sets `ready` status. Do not
+   show partial output as a usable asset in the catalog or arranger. Retain
+   partial and unused audio files. Do not delete them during recovery or
+   cleanup.
 
 Validate imports when no transformation is necessary too. Deduplicate jobs by
 source content, selected region, target BPM, pitch settings and processor
-version. A change of settings makes a new derivative. Do not overwrite audio
-that an existing project uses. Calculate waveforms and markers again when their
-inputs change.
+version. A change of settings makes a new derivative with a new path. Do not
+overwrite any existing audio file. If a destination exists, use another path.
+Calculate waveforms and markers again when their inputs change.
 
 Start with one resource-intensive job at a time. Give playback priority for
 resources. Show the job phase and measurable progress. Give cancel and retry
@@ -370,50 +403,90 @@ cancellation. As an alternative, stop the Worker. Make a new Worker safely.
 
 Background work here means asynchronous work while the browser session can
 operate. A closed tab or a suspended operating system can stop the work. Save
-the queue and completed files. When the session opens again, start interrupted
-work again. Do not promise that a service worker will finish a long DSP job
-after the tab closes.
+the queue in a sample-folder manifest. Keep completed files in that folder.
+After folder access returns, retry interrupted work with new output paths.
+Retain incomplete audio from earlier attempts. Do not promise that a service
+worker will finish a long DSP job after the tab closes.
 
 ## 6. Projects, storage and export
 
-Use IndexedDB for searchable metadata, project revisions and jobs. Use OPFS for
-large source files and prepared files. Give a bounded IndexedDB Blob storage
-alternative. Show storage estimates. Give clear messages for quota errors.
-Request persistent storage where applicable.
+### Sample folder and audio protection
 
-Browser storage is not a backup. Site-data deletion can remove this storage.
-[Private source evidence](research/local-research.md) gives the storage
-behavior.
-
-| Record         | Necessary fields                                                                                                           |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Project        | schema version, stable ID, revision, fixed BPM/key, meter/ticks, tracks, clips, loop region                                |
-| Track          | stable ID, order, name, gain, pan, mute, solo                                                                              |
-| Clip           | stable ID, track ID, prepared asset ID, start/length ticks, source offset, repeat and fades                                |
-| Sample         | content hash, original name, category, declared/detected/corrected metadata, provenance                                    |
-| Prepared asset | source region, target tempo/key or neutral class, processor version/settings, hash, frames, channels, loop markers, status |
-| Job            | inputs, phase, retry/cancel state, progress, error and completed output references                                         |
-
-Keep musical project state separate from UI components, filenames and skin
-selection. Validate documents on load. Give explicit schema migrations. Autosave
-each valid new revision in a transaction. Keep the last valid revision.
-
-Write the audio asset before the metadata commit. OPFS and IndexedDB do not
-share a transaction. Do not let two tabs edit the same project at the same time.
-As an alternative, open the second tab in read-only mode.
-
-This plan recommends a `.ravefold` archive with versioned JSON, checksums and
-referenced prepared audio. Include source regions or files only when the user
-selects that option for subsequent reprocessing. File relinking can be necessary
-for a JSON-only reference export. Make its difference from a portable project
-clear. Before a write of imported content, validate archive paths, expanded
-sizes and checksums.
+Keep all library audio in the selected sample folder. This includes source files
+and new files from sample preparation. Do not persist samples in localStorage,
+IndexedDB, OPFS, the Cache API or a settings folder. Do not create other
+persistent sample copies outside the selected sample folder.
 
 Keep the full library on disk. Do not decode the full library into memory.
-Decode and cache only the visible preview and the current arrangement's working
-set. Use the capacity evidence in private research. Measure the prototype before
-you select fixed cache limits. Do not load all samples only to show library
+Decode only the visible preview and the current arrangement's working set.
+Runtime memory buffers are not persistent sample copies. Release those buffers
+when they are no longer necessary. Do not delete disk audio to reduce memory use
+or free disk space.
+
+Use sample-folder manifests for catalog metadata, processing jobs and completed
+output references. Complete and validate an audio write before its manifest
+marks the file ready. A failed manifest write must not cause audio deletion.
+Recover a job without overwriting its previous output. Give a clear message when
+access fails or the disk has insufficient space.
+
+Do not let two tabs write to the same project or output path concurrently. Open
+the second tab in read-only mode, or require a new output path. Test the write
+design before implementation claims protection against replacement.
+
+### Settings and project files
+
+The user requires application and user settings in a standard per-user OS
+folder. The exact folder and browser access method remain open. A browser cannot
+silently access arbitrary Documents or AppData paths. Directory access requires
+a supported browser mechanism and user permission. Do not select a native helper
+or browser-storage substitute without a product decision.
+
+Settings must contain no sample or other audio data. Skin selection remains a
+user preference, separate from musical project state.
+
+| Record         | Necessary fields                                                                                                                        |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Project        | schema version, stable ID, revision, fixed BPM/key, meter/ticks, tracks, clips, loop region, sample-path references                     |
+| Track          | stable ID, order, name, gain, pan, mute, solo                                                                                           |
+| Clip           | stable ID, track ID, sample path, start/length ticks, source offset, repeat, fades and missing-file state                               |
+| Sample         | folder path, content hash, original name, category, declared/detected/corrected metadata, provenance                                    |
+| Prepared asset | folder path, source region, target tempo/key or neutral class, processor version/settings, hash, frames, channels, loop markers, status |
+| Job            | inputs, phase, retry/cancel state, progress, error and completed output references                                                      |
+
+Save project files with arrangement metadata and sample-path references only. Do
+not embed audio bytes, encoded audio, audio archives or audio regions. This plan
+recommends a versioned `.ravefold` JSON document. It recommends sample paths
+relative to the selected folder. The path format still requires a decision.
+Reject references that escape the selected sample folder.
+
+Keep musical project state separate from UI components and skin selection.
+Validate documents on load. Give explicit schema migrations. Keep project save
+and recovery independent from rendered-song export. Project autosave and its
+destination remain recommendations until their storage details are agreed.
+
+An invalid sample path must not prevent an otherwise valid project from loading.
+Load its remaining clips normally. Keep each missing clip's track, position,
+duration and original reference. Show a red bubble at that position in the
+tracker. Add a text label that identifies the missing sample. Save the missing
+reference and placement again when the user saves the project.
+
+Missing individual samples differ from an unavailable sample folder. A project
+with missing samples can open after a valid folder is available. The main editor
+stays blocked while no valid folder is available. File relinking is a
+recommended recovery command and must keep references inside the selected sample
+folder.
+
+Use the capacity evidence in private research. Measure the prototype before
+selecting memory-buffer limits. Do not load all samples only to show library
 rows.
+
+### Rendered-song export
+
+Require the user to select a destination folder before rendering a song. Do not
+save rendered songs automatically in the user or settings folder. A song export
+is separate from library samples and can use another selected folder.
+Cancellation or denied destination access must prevent the export write. This
+plan recommends a new filename if the destination already contains one.
 
 Use the same graph builder and clip timing rules for playback and stereo WAV
 export. Render with `OfflineAudioContext` and a Worker encoder. This plan
@@ -444,6 +517,7 @@ Acceptance evidence:
 - No `ready` status for uncertain entries.
 - No change to source files.
 - Criteria for corpus coverage and manual review.
+- Folder-validity, permission, settings-location and project-path contracts.
 - Technical selections that depend on measurements stay open until M1.
 
 ### M1: Audio and DSP proof
@@ -461,11 +535,13 @@ Acceptance evidence:
 - CPU and memory measurements for playback, DSP and the material UI at the same
   time.
 - Listening review and corpus coverage results.
+- Folder-access and new-file-write evidence from a supported browser.
 
 ### M2: Workspace
 
-Build the application shell, library and arranger. Add command undo and
-accessible editing. Add the six reference presets.
+Build the setup window with sample-folder selection. Build the application
+shell, library and arranger. Add command undo and accessible editing. Add the
+six reference presets.
 
 Acceptance evidence:
 
@@ -473,11 +549,16 @@ Acceptance evidence:
   a keyboard.
 - The same control behavior and continuous audio in all six skins.
 - A functional CSS fallback.
+- The editor cannot start without a valid sample folder.
+- Setup remains usable after cancellation, invalid selection or denied access.
+- Revoked folder access returns the app to the folder requirement without an
+  application error or loss of project state.
+- No sample assets in the application distribution.
 
 ### M3: Full import
 
-Add the persistent queue, analysis and review interface, prepared-asset cache,
-stereo pairing and batch import.
+Add the manifest queue, analysis and review interface, sample-folder prepared
+files, stereo pairing and batch import.
 
 Acceptance evidence:
 
@@ -486,16 +567,29 @@ Acceptance evidence:
 - Correct acceptance of natural, harmonic and melodic C-minor phrases.
 - Unchanged sound and duration for unpitched one-shots. Tempo conversion without
   pitch shifting for unpitched drum and noise loops.
-- Correct results for corrupt input, stereo, retry and quota errors.
+- Correct results for corrupt input, stereo, retry and insufficient disk space.
+- New prepared files only inside the selected sample folder.
+- No delete, overwrite, replacement or truncation of existing audio files.
+- No audio writes to browser storage or the settings folder.
+- Retained partial audio after cancellation, failure and recovery.
+- Manifest changes and deletion leave all audio files unchanged.
 
 ### M4: Save and export
 
-Add autosave, recovery, portable archives, file relinking and offline stereo WAV
-export.
+Add project save, recovery, file relinking and offline stereo WAV export.
+Implement settings storage after the location and access decision.
 
 Acceptance evidence:
 
-- A project that opens in a clean browser profile with the same data and assets.
+- Project files contain arrangement metadata and sample paths, with no audio.
+- A saved project opens after the user selects the necessary sample folder.
+- Missing sample paths do not prevent project loading or remaining playback.
+- Each missing sample has a red tracker bubble at its original clip position.
+- Missing-sample labels support accessibility.
+- Saving again preserves missing sample references and clip placement.
+- No rendered-song write occurs before destination-folder selection.
+- Destination cancellation and denied access create no song export.
+- Settings persist in the agreed location without audio data.
 - Export timing that matches the arrangement.
 - Export audio that matches the mixer state.
 
@@ -511,7 +605,7 @@ Acceptance evidence:
 - Tests for all six skins, recovery and export.
 - A document that gives the remaining limits.
 
-Use M1 results to select the detector, DSP package, cache limits and minimum
+Use M1 results to select the detector, DSP package, buffer limits and minimum
 release hardware. M2 can use code from the prototype. Keep temporary test code
 only if it becomes part of the maintained test tools. Remove other temporary
 test code.
@@ -571,10 +665,15 @@ Do tests for these conditions:
 
 - WebGL2 loss or no WebGL2.
 - No folder picker.
-- Denied persistent storage.
-- Exhausted storage quota.
+- No valid sample folder, or cancellation of folder selection.
+- Denied or revoked folder permissions.
+- Insufficient disk space.
 - Interrupted imports.
-- Missing assets.
+- Missing sample paths and their red tracker bubbles.
+- Partial and unused audio that must remain on disk.
+- Existing destination files that must not be overwritten during preparation.
+- Project files that attempt to embed audio or escape the sample folder.
+- Export cancellation before destination selection or write permission.
 - Suspended audio.
 - Missing browser capabilities without uncaught errors or a failed application.
 
@@ -619,12 +718,23 @@ Use a labeled corpus with 90/180 ambiguity, off-grid recordings, minor, major,
 mixed-key and unpitched audio. Report errors and review rates before you set
 confidence thresholds for `ready` status.
 
-### Recovery and portability
+### Recovery and file protection
 
 Stop the app without its usual shutdown procedure during each import and save
 phase. Then reload the app. Keep the last valid project. Do not give a partial
-asset `ready` status. Clear browser storage before you open a portable archive
-again. Make sure that the archive restores the project.
+asset `ready` status. Keep all existing audio unchanged. Resume with a new
+output path when earlier partial output remains.
+
+Open a saved project in a clean browser profile after selecting its sample
+folder. Use a project fixture with one absent sample path. Check the missing
+clip's red bubble, text label, position and retained reference. Check remaining
+playback and the project file after another save.
+
+Audit storage writes during setup, preparation, cancellation, recovery and
+export. Check that library audio stays inside the sample folder. Check that only
+an explicit render destination receives exported songs. Compare file hashes
+before and after each operation. Confirm that no existing audio was deleted or
+changed.
 
 ### Accessibility
 
@@ -646,6 +756,18 @@ These requirements have user approval:
 - The typed language and major-7 compiler.
 - The framework and UI library.
 - The six reference skins.
+- No supplied samples. The user selects a sample folder in setup.
+- No tracker or editor startup until a valid sample folder is available.
+- Library audio stays exclusively in the selected sample folder.
+- No sample persistence in browser storage or the settings folder.
+- New audio and manifests are permitted in the sample folder.
+- Existing audio cannot be deleted, overwritten, replaced or truncated.
+- Manifest files can be changed or deleted.
+- Settings belong in a standard per-user OS folder. Its exact access method and
+  location remain open.
+- Rendered songs require a user-selected destination folder.
+- Project files contain arrangement metadata and sample paths, with no audio.
+- Missing sample paths allow normal project loading with red tracker bubbles.
 - Full first-release editing on desktop and laptop computers with a keyboard and
   pointer. Full tablet and phone editing are outside this release.
 - Official support for Chromium-based desktop browsers only. Other browsers must
@@ -667,13 +789,15 @@ These requirements have user approval:
 
 Do not reopen these decisions without new evidence or a user change.
 
-| Decision                                | Recommendation                                                                                                       | Responsible person and next test                                                                                          |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Key-detector confidence                 | Review uncertain key results. Select confidence thresholds from corpus measurements.                                 | Product owner and audio developer: identify representative phrases. Compare detector results in M1.                       |
-| Browser versions, capacity and hardware | Eight initial tracks and up to 32 tracks. Use measurements to select supported versions and hardware limits.         | Product owner and developer: use M1 measurements to set supported limits.                                                 |
-| Catalog distribution                    | Local user imports. Public builds contain only material with separate distribution permission.                       | Product owner: examine the applicable terms or get permission before distribution of source library files.                |
-| DSP and detector selection              | Do a test of the DSP candidate in private research. Select a detector after the corpus test.                         | Audio developer: do tests of Worker operation, latency compensation, quality and performance. Review dependency licenses. |
-| Corpus acceptance criteria              | No silent incorrect `ready` result in labeled fixtures. Set usable-coverage and manual-review limits for each class. | Product owner and audio developer: give approval for the corpus and numerical limits in M0. Measure results in M1.        |
+| Decision                                | Recommendation                                                                                                       | Responsible person and next test                                                                                            |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Key-detector confidence                 | Review uncertain key results. Select confidence thresholds from corpus measurements.                                 | Product owner and audio developer: identify representative phrases. Compare detector results in M1.                         |
+| Browser versions, capacity and hardware | Eight initial tracks and up to 32 tracks. Use measurements to select supported versions and hardware limits.         | Product owner and developer: use M1 measurements to set supported limits.                                                   |
+| Settings location and browser access    | Select the exact per-user folder and an access method compatible with the browser requirement.                       | Product owner: choose the permission and setup behavior. Developer: verify the browser API before implementation.           |
+| Folder validity and project paths       | Define validity and read/write permissions. Prefer paths relative to the selected sample folder.                     | Product owner: decide whether an empty or read-only folder is valid. Developer: test revoked access and missing references. |
+| Project save and recovery destination   | Use metadata-only project files. Decide the destination and whether project autosave is required.                    | Product owner: select save behavior. Developer: test interrupted metadata writes without audio changes.                     |
+| DSP and detector selection              | Do a test of the DSP candidate in private research. Select a detector after the corpus test.                         | Audio developer: do tests of Worker operation, latency compensation, quality and performance. Review dependency licenses.   |
+| Corpus acceptance criteria              | No silent incorrect `ready` result in labeled fixtures. Set usable-coverage and manual-review limits for each class. | Product owner and audio developer: give approval for the corpus and numerical limits in M0. Measure results in M1.          |
 
 Use [.github/skills/grill-me/SKILL.md](../.github/skills/grill-me/SKILL.md) for
 one decision at a time. Record the answers here. Update PRODUCT.md only with
@@ -696,5 +820,5 @@ material panels. M5 applies the combined workload again to the complete
 application before a release performance claim.
 
 When the user requests development, start with M0 and then M1. The next plan
-decision concerns a first-release sample pack. Use the decision-interview skill
-for that decision.
+decision concerns the settings folder and browser access. Use the
+decision-interview skill for that decision.

@@ -9,6 +9,7 @@ AGENTS.md
 
 # Private research and source records.
 research/
+samples/
 
 # Local npm dependencies.
 /node_modules/
