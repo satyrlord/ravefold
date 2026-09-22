@@ -19,7 +19,7 @@ if (
   throw new Error("The extension package version is invalid.");
 const files = await listFiles({ cwd: root, packagedDependencies: [] });
 const allowed =
-  /^(package\.json|README\.md|out\/extension\.cjs|web\/index\.html|web\/[a-z-]*license\.txt|web\/third-party-notices\.txt|web\/assets\/[a-zA-Z0-9_.-]+\.(js|css|woff2))$/;
+  /^(package\.json|README\.md|out\/extension\.cjs|web\/index\.html|web\/[a-z-]*license\.txt|web\/third-party-notices\.txt|web\/assets\/[a-zA-Z0-9_.-]+\.(js|css|woff2|svg))$/;
 let local = "";
 try {
   local = await readFile(".env.local", "utf8");
