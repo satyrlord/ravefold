@@ -1,6 +1,7 @@
 interface:
-  display_name: 'Grill Me'
-  short_description: 'Resolve one design decision at a time'
-  default_prompt: 'Use $grill-me to challenge this RaveFold plan one decision at a time.'
+  display_name: "Grill Me"
+  short_description: "Resolve one design decision at a time"
+  default_prompt:
+    "Use $grill-me to challenge this RaveFold plan one decision at a time."
 policy:
   allow_implicit_invocation: true

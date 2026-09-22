@@ -4,3 +4,6 @@
 
 # Private source research and attribution.
 /docs/research.md
+
+# Local npm dependencies.
+/node_modules/
