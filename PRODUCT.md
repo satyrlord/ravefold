@@ -10,6 +10,11 @@ Official support is for Chromium-based desktop browsers only. Other browsers
 must open and operate without browser-related errors. An unavailable feature
 must not cause the rest of the application to fail.
 
+An optional desktop editor extension supplies native folder access in its own
+application tab. It uses the same interface and file protection rules. It
+remembers only selected folder references. The user can remove these references
+without changes to folder contents.
+
 ## Product purpose
 
 RaveFold is a new interpretation of sample-based music software for web

@@ -8,7 +8,12 @@ if (!npmCli) {
 
 let failed = false;
 
-for (const script of ["typecheck", "lint:md", "format:check"] as const) {
+for (const script of [
+  "typecheck",
+  "test:unit",
+  "lint:md",
+  "format:check",
+] as const) {
   const result = spawnSync(process.execPath, [npmCli, "run", script], {
     stdio: "inherit",
   });

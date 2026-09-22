@@ -1,8 +1,7 @@
 # Spec-001: Main menu and tracker entry
 
-Status: Implementation has user approval. Verification of the menu
-implementation is in progress. The interview is completed. Evidence is necessary
-for acceptance of native folder access.
+Status: Implemented with user approval. Automated checks pass. The interview is
+completed. Native folder acceptance and hardware measurements remain incomplete.
 
 ## Outcome
 
@@ -80,7 +79,9 @@ usual renderer is unavailable.
 
 Use Documents as the starting location for the settings picker. This is a
 location suggestion, not proof of the selected folder's absolute path. Do not
-infer a machine path from a displayed folder name. Do not add a local helper.
+infer a machine path from a displayed folder name. The standard browser uses its
+native folder picker. The optional editor extension uses the adapter with user
+approval in [the native contract](spec-001-native-adapter.md).
 
 Count a file only after its header and available data pass the selected format
 checks. A filename extension alone is not sufficient. Spec-003 gives musical
@@ -100,6 +101,12 @@ changing audio in the sample folder.
 Save references only after a successful selection. If browser persistence is
 unavailable, keep this session usable. Tell the user to select the folders
 again. Clearing browser data must not remove any files in the selected folders.
+
+An embedded host can deny file-system access after folder selection. Report that
+host limit when the permission result is denied. Keep entry blocked and keep
+files unchanged. Do not bypass browser permissions. The optional extension
+supplies a separate application tab with native folder access. Other embedded
+views keep their host permission limits.
 
 ## Main menu and entry controls
 
@@ -221,6 +228,11 @@ on their opening control. Tooltips show on hover and focus without replacement
 of labels. At 200% zoom, keep entry and correction controls reachable. Small
 viewports can scroll without hiding the action that corrects a blocked state.
 
+Show only one tooltip at a time. A pointer click must not keep a tooltip open.
+Close a pointer tooltip after the pointer leaves the control and tooltip. Keep
+keyboard tooltips until focus moves or the user presses Escape. Place each
+tooltip above dialog clipping and inside the visible viewport.
+
 ## Acceptance checks
 
 | ID        | Given and action                                                                               | Expected result                                                                                                    |
@@ -275,6 +287,12 @@ acceptance.
 
 ### Implementation evidence
 
+On 2026-09-22, `quality:full` passed 107 unit tests and 38 headless browser
+tests. One POSIX-only unit test was skipped on Windows. The gate also passed
+strict compiler checks, document checks and the production build. Independent
+source and visual reviews are complete. The visual review result is `ship` for
+the menu scope. Build checks found no private path values or audio assets.
+
 The application uses the file contracts linked above. The menu transfers one
 checked entry result through its callback. The current application displays a
 project-ready state. Spec-006 will supply the tracker view.
@@ -290,6 +308,8 @@ The following tests use generated data:
 | Entry, recovery, failed writes and permissions | `tests/browser/storage-flows.spec.ts`                                        |
 | Native handle storage and reload               | `tests/browser/persistence.spec.ts`                                          |
 | Native picker cancellation                     | `tests/browser/native-picker.spec.ts`                                        |
+| Tooltip dismissal and viewport limits          | `tests/browser/tooltips.spec.ts`                                             |
+| Embedded permission denial and file protection | `tests/browser/embedded-permissions.spec.ts`                                 |
 | Appearance and keyboard access                 | `tests/browser/appearance.spec.ts` and `tests/browser/accessibility.spec.ts` |
 
 The handle persistence test uses browser-owned fixture folders. It proves native
@@ -300,6 +320,12 @@ Native successful folder selection, permission revocation and the supported
 browser version range still need acceptance evidence. Compact viewport checks
 test the layout size at 200% zoom. They do not operate the browser zoom control.
 Hardware performance and combined audio work remain M1 tasks.
+
+Chromium checks include Full, Reduced and Static effects. The limited checks in
+another browser engine cover Static and Full settings without application
+errors. They do not establish full material support in that engine. Early
+headless runs had long initial shader startup and input delays. Real hardware
+startup performance still needs a check.
 
 Application dialogs use native modal focus and themed CSS surfaces. They share
 the selected colors and controls. They do not start another material renderer.

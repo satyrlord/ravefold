@@ -527,10 +527,13 @@ not select the full Documents folder. Do not write to AppData without a message
 to the user. Request access through the browser folder picker. Save settings
 there only while the necessary permission permits writing.
 
-This design keeps the browser-only delivery model. Do not add a local helper.
-Use IndexedDB only for the selected folders' access references. Do not store
-audio, settings values, projects or sample manifests there. Keep those files in
-their selected filesystem locations.
+The standard application keeps browser-native folder access. The user approved
+an optional editor extension for native folder access in a separate application
+tab. Its [adapter contract](specs/spec-001-native-adapter.md) limits access to
+selected folders. It does not supply a local network service. Use IndexedDB only
+for the selected folders' access references. Do not store audio, settings
+values, projects or sample manifests there. Keep those files in their selected
+filesystem locations.
 
 On startup, restore the folder references. Then examine their permissions. A
 saved reference is not proof of current access. If a reference is missing or
@@ -852,7 +855,7 @@ These requirements have user approval:
 - Existing audio cannot be deleted, overwritten, replaced or truncated.
 - Manifest files can be changed or deleted.
 - Settings use a dedicated RaveFold folder in Documents, selected during setup.
-  No local helper is necessary.
+  The optional editor extension uses the same selected-folder rules.
 - Browser persistence of folder-access references only. Folder permissions
   apply. No audio or settings values go into browser storage.
 - The user selects a destination folder for rendered songs.

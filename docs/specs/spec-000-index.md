@@ -1,7 +1,7 @@
 # RaveFold product slices
 
-Status: Spec-001 implementation has user approval. Verification is in progress.
-Subsequent specifications stay drafts.
+Status: Spec-001 is implemented and passes automated checks. Its specification
+records remaining acceptance limits. Subsequent specifications stay drafts.
 
 ## Authority and review boundary
 

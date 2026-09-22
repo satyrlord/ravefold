@@ -21,3 +21,6 @@ tmp/
 /test-results/
 /playwright-report/
 /debug.log
+/extensions/ravefold/out/
+/extensions/ravefold/web/
+/artifacts/

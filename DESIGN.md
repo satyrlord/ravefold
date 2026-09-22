@@ -161,7 +161,12 @@ uses a 3px outline with a 5px offset.
 
 The skin selector uses six labeled radio controls. A selected preview has an
 outline and a check mark. Folder rows show the name, status text and state dot.
-Tooltips appear on hover or focus. Escape dismisses the current tooltip.
+Tooltips appear on pointer hover or keyboard focus. A mouse click does not keep
+a tooltip open. Pointer exit closes a pointer tooltip. Escape or loss of
+keyboard focus also closes it. Only one tooltip can appear at a time. The
+tooltip uses the top layer and stays inside the viewport.
+
+The top layer places content above dialogs and other page elements.
 
 Native dialogs keep keyboard focus. When a dialog closes, its opening control
 receives focus again. Full effects use the reference settings. Reduced effects

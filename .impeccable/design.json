@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-22T17:40:58Z",
+  "title": "Design System: RaveFold",
+  "extensions": {
+    "shadows": [
+      {
+        "name": "panel-static",
+        "value": "inset 0 0 0 1px var(--edge), 0 18px var(--material-depth) -18px rgb(0 0 0 / 45%)",
+        "purpose": "Static panels. The registry controls depth. Reference 3 keeps only the inset edge."
+      },
+      {
+        "name": "dialog",
+        "value": "0 22px 90px #0007",
+        "purpose": "Native modal dialogs."
+      },
+      {
+        "name": "tooltip",
+        "value": "0 6px 16px #0003",
+        "purpose": "Tooltip separation from the control surface."
+      }
+    ],
+    "motion": [
+      {
+        "name": "project-action",
+        "value": "background 0.16s ease",
+        "purpose": "Project action background changes."
+      },
+      {
+        "name": "static",
+        "value": "animation: none !important; transition-duration: 0s !important",
+        "purpose": "Static effects and unavailable material renderers."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "menu-stack",
+        "value": "860px"
+      },
+      {
+        "name": "menu-narrow",
+        "value": "540px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Standard button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Secondary actions in panels and dialogs.",
+      "html": "<button class=\"ds-button\" type=\"button\">Select folder</button>",
+      "css": ".ds-button{font-family:\"Space Grotesk Variable\",sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:44px;padding:11px 18px;border:1px solid var(--edge,rgb(172 232 227 / 28%));background:var(--plate,rgb(6 16 22 / 84%));color:var(--text,#eef4f6);border-radius:9px;font-size:14px;cursor:pointer}.ds-button:hover:not(:disabled){background:var(--surface,rgb(8 28 37 / 80%))}.ds-button:focus-visible{outline:3px solid var(--focus,#9ff3e4);outline-offset:5px;}.ds-button:disabled{cursor:not-allowed;opacity:.45;}"
+    },
+    {
+      "name": "Primary button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The explicit tracker entry action.",
+      "html": "<button class=\"ds-primary\" type=\"button\">Enter tracker</button>",
+      "css": ".ds-primary{font-family:\"Space Grotesk Variable\",sans-serif;display:inline-flex;align-items:center;justify-content:center;gap:12px;min-height:44px;padding:11px 18px;border:1px solid transparent;background:var(--on,#def8f2);color:var(--on-text,#062a29);border-radius:9px;font-size:14px;cursor:pointer}.ds-primary:hover:not(:disabled){background:var(--on,#def8f2);filter:brightness(1.1)}.ds-primary:focus-visible{outline:3px solid var(--focus,#9ff3e4);outline-offset:5px;}.ds-primary:disabled{cursor:not-allowed;opacity:.45;}"
+    },
+    {
+      "name": "Primary project action",
+      "kind": "button",
+      "refersTo": "project-action-primary",
+      "description": "The main menu action for a new project.",
+      "html": "<button class=\"ds-project\" type=\"button\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M12 5v14M5 12h14\"/></svg><span class=\"ds-project-label\">New project<svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M4 12h16m-6-6 6 6-6 6\"/></svg></span></button>",
+      "css": ".ds-project{font-family:\"Space Grotesk Variable\",sans-serif;width:100%;min-height:112px;padding:18px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:22px;border:1px solid transparent;border-radius:12px;background:var(--on,#def8f2);color:var(--on-text,#062a29);transition:background .16s ease;text-align:left;font-size:16px;cursor:pointer}.ds-project-label{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px}.ds-project:hover{filter:brightness(1.12)}.ds-project:focus-visible{outline:3px solid var(--focus,#9ff3e4);outline-offset:5px;}.ds-project:disabled{cursor:not-allowed;opacity:.45;}"
+    },
+    {
+      "name": "Appearance select",
+      "kind": "input",
+      "refersTo": "select",
+      "description": "Native selection for theme mode and effects.",
+      "html": "<label class=\"ds-select-field\">Theme mode<select class=\"ds-select\"><option>System</option><option>Light</option><option>Dark</option></select></label>",
+      "css": ".ds-select-field{font-family:\"Space Grotesk Variable\",sans-serif;display:flex;flex-direction:column;gap:9px;font-size:13px;color:var(--text,#eef4f6)}.ds-select{font:inherit;background:var(--plate,rgb(6 16 22 / 84%));color:inherit;border:1px solid var(--edge,rgb(172 232 227 / 28%));border-radius:8px;min-height:42px;padding:8px;min-width:0;width:100%}.ds-select option{background:var(--bg,#04111c);color:var(--text,#eef4f6)}.ds-select:focus-visible{outline:3px solid var(--focus,#9ff3e4);outline-offset:5px;}"
+    },
+    {
+      "name": "Static panel",
+      "kind": "card",
+      "refersTo": "panel-static",
+      "description": "The Reference 2 dark panel without the material renderer.",
+      "html": "<section class=\"ds-panel\"><h2 class=\"ds-panel-title\">Folders</h2><p class=\"ds-panel-status\">Not selected</p></section>",
+      "css": ".ds-panel{font-family:\"Space Grotesk Variable\",sans-serif;position:relative;border-radius:var(--material-radius,26px);padding:30px;background:var(--surface,rgb(8 28 37 / 80%));color:var(--text,#eef4f6);box-shadow:inset 0 0 0 1px var(--edge,rgb(172 232 227 / 28%)),0 18px var(--material-depth,25px) -18px rgb(0 0 0 / 45%)}.ds-panel-title{margin:0;font-size:20px;letter-spacing:-.02em;font-weight:500}.ds-panel-status{margin:22px 0 0;font-size:13px;line-height:1.5;color:var(--muted,#b9cdd3)}"
+    },
+    {
+      "name": "Themed dialog",
+      "kind": "custom",
+      "refersTo": "dialog",
+      "description": "A static preview of the native modal surface.",
+      "html": "<dialog class=\"ds-dialog\" open aria-labelledby=\"ds-dialog-title\"><header class=\"ds-dialog-heading\"><h2 id=\"ds-dialog-title\" class=\"ds-dialog-title\">Folder settings</h2><button class=\"ds-dialog-close\" type=\"button\" aria-label=\"Close dialog\"><svg width=\"22\" height=\"22\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m6 6 12 12M18 6 6 18\"/></svg></button></header></dialog>",
+      "css": ".ds-dialog{font-family:\"Space Grotesk Variable\",sans-serif;position:relative;color:var(--text,#eef4f6);background:var(--bg,#04111c);border:1px solid var(--edge,rgb(172 232 227 / 28%));border-radius:16px;padding:28px;width:min(600px,calc(100vw - 32px));max-height:calc(100dvh - 40px);overflow:auto;box-shadow:0 22px 90px #0007}.ds-dialog::backdrop{background:#080b14a8;backdrop-filter:blur(8px)}.ds-dialog-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:26px;gap:20px}.ds-dialog-title{margin:0;font-size:20px;letter-spacing:-.02em;font-weight:500}.ds-dialog-close{border:0;border-radius:8px;background:transparent;color:inherit;padding:8px;display:flex;cursor:pointer}.ds-dialog-close:hover{background:var(--plate,rgb(6 16 22 / 84%))}.ds-dialog-close:focus-visible{outline:3px solid var(--focus,#9ff3e4);outline-offset:5px;}"
+    }
+  ],
+  "narrative": {
+    "overview": "Users do music tasks with clear controls and six reference skins. The menu gives priority to task completion. The skins change material, color and motion. Layout and control meanings stay the same.",
+    "dos": [
+      "Use the six registry definitions and shared theme properties.",
+      "Keep labels, focus and status clear in each skin.",
+      "Keep layout and control meanings stable across skins."
+    ],
+    "donts": [
+      "Do not add material surfaces to each row or control.",
+      "Do not use color alone to show a state.",
+      "Do not replace native modal behavior with a decorative panel."
+    ]
+  }
+}
