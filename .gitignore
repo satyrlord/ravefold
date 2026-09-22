@@ -1,9 +1,12 @@
-# Private machine configuration. Never expose these values in browser bundles.
+# Private local settings. Do not put these values in browser files.
 .env.local
 .env.*.local
 
-# Private source research and attribution.
-/docs/research.md
+# Agent instructions
+AGENTS.md
+
+# Private research and source records.
+research/
 
 # Local npm dependencies.
 /node_modules/

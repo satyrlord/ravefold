@@ -3,12 +3,12 @@ import { spawnSync } from "node:child_process";
 const npmCli = process.env.npm_execpath;
 
 if (!npmCli) {
-  throw new Error("Run this gate with npm run quality:quick.");
+  throw new Error("Use npm run quality:quick to start the checks.");
 }
 
 let failed = false;
 
-for (const script of ["lint:md", "format:check"]) {
+for (const script of ["typecheck", "lint:md", "format:check"] as const) {
   const result = spawnSync(process.execPath, [npmCli, "run", script], {
     stdio: "inherit",
   });
@@ -22,5 +22,5 @@ for (const script of ["lint:md", "format:check"]) {
   }
 }
 
-console.log(`Quick quality gate: ${failed ? "failed" : "passed"}`);
+console.log(failed ? "Checks failed." : "Checks passed.");
 process.exitCode = failed ? 1 : 0;

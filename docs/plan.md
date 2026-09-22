@@ -1,107 +1,119 @@
 # RaveFold delivery plan
 
-Date: 2026-09-22. Status: researched proposal; application implementation has
-not started. [PRODUCT.md](../PRODUCT.md) owns confirmed user requirements.
-[Private research notes](research.md) distinguish inspected facts from untested
-proposals. All other choices below are recommended defaults, not additional user
-approvals. Exact technology names, source links and asset evidence remain in
-that ignored local file. Public copies of this plan require access to the
-private specification before source-dependent implementation decisions can be
-made.
+Date: 2026-09-22. This document is a recommended plan. Work on the application
+code did not start. [PRODUCT.md](../PRODUCT.md) gives the requirements with user
+approval. [Private research notes](research/local-research.md) separate source
+evidence from recommendations. Other items in this plan are recommendations, not
+user approvals.
+
+The private research folder contains technology names, source links and asset
+evidence. That folder is not part of public copies of this repository. Read the
+private specification before you use its sources for decisions.
 
 ## 1. Product and first release
 
-Make a rave track by finding a sound, hearing it, placing it on a musical grid,
-building variations, and exporting the result. Preserve OG's immediate
-sample-building workflow while adding reliable undo, searchable sounds,
-background import, clear waveforms, and portable projects.
+RaveFold uses samples to make rave music in a browser. A sample is an audio file
+or a selected section of that file. A clip is a timed use of a sample on a
+track. An arrangement gives the position and duration of each clip.
 
-Proposed audience: people who want to compose rave music quickly, including
-returning OG users. Start with desktop and laptop browsers, keyboard and mouse.
-The first useful outcome is a saved, reopenable, exported arrangement made from
-the user's local library.
+Keep the simple composition process from OG. Add undo, sound search, background
+import, clear waveforms and portable projects. A portable project contains the
+data and audio necessary to open it on a different computer.
 
-OG provides the workflow reference for arrangement, sample import, recording and
-sound generation. Source descriptions and library measurements are retained in
-[private research](research.md#original-product).
+The intended users want to make rave music quickly. They can include persons who
+used OG. Start with desktop and laptop browsers, a keyboard and a mouse. The
+first result is an arrangement that the user can save, open again and export.
+Use samples from the local library for this result.
 
-| First release                                                                         | Later, after the core passes verification               |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| Library search, category filters, favorites, preview, waveform and preparation status | Microphone recording and resampling                     |
-| Eight initial tracks, add/remove/reorder up to a proposed tested limit of 32          | A new OG-inspired sound synthesizer                     |
-| Drag or keyboard insert, move, duplicate, delete, trim and repeat clips; undo/redo    | Automation lanes, richer effects and performance scenes |
-| Play, pause, stop, seek, loop region, musical snap and timeline zoom                  | MIDI input and external synchronization                 |
-| Track gain, pan, mute, solo, meters; master gain and clipping indication              | Cloud accounts, collaboration and public sample sharing |
-| Background preparation of imports, with review and retry                              | Legacy OG project conversion, if separately researched  |
-| Autosave, portable project archive, stereo WAV export, all six skins                  | Full mobile editing and note-level mode conversion      |
+OG is the reference for arrangement, sample import, audio recording and sound
+generation. [Private research](research/local-research.md#original-product)
+contains source descriptions and library measurements.
 
-Do not add a variable project tempo, a key selector, plug-in hosting, or a full
-piano-roll editor to this release. The fixed musical context is a product
-feature.
+| First release                                                                                                      | Subsequent work, after all first-release tests give correct results          |
+| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Library search, category filters, favorites, preview, waveforms and preparation status                             | Microphone recording and resampling                                          |
+| Eight initial tracks, with controls to add, remove and change their sequence. Recommended tested limit: 32 tracks. | A new sound synthesizer based on OG                                          |
+| Clip insertion by drag-and-drop or keyboard, movement, duplication, deletion, trim, repeat, undo and redo          | Automation lanes, more effects and performance scenes                        |
+| Play, pause, stop, seek, loop region, musical snap and timeline zoom                                               | MIDI input and external synchronization                                      |
+| Track gain, pan, mute, solo and meters. Master gain and clipping indication.                                       | Cloud accounts, shared editing and public sample exchange                    |
+| Background import preparation, review and retry                                                                    | OG project conversion, after separate format research                        |
+| Autosave, portable project archive, stereo WAV export and all six skins                                            | Full mobile editing and conversion of individual notes between musical modes |
+
+Do not add variable project tempo, a key selector, plug-in hosting or a full
+piano-roll editor to this release. The fixed tempo and key are product features.
 
 ## 2. Musical contract
 
-### Confirmed decisions
+### Decisions with user approval
 
-- The arrangement runs at **180 BPM in C minor**.
-- Ready rhythmic samples are **90 or 180 BPM only**.
-- Convert **every other source tempo**, including 45, 135 and 270 BPM, before
-  use. This clarification replaces the initial multiple-of-45 exception.
-- Required stretching and shifting complete in the background before readiness.
-- Major and mixed-key imports remain in review. Only compatible sections can be
-  used in the first release. A global pitch shift does not change musical mode.
+- The arrangement operates at **180 BPM in C minor**.
+- Rhythmic samples with **`ready` status** have a tempo of **90 or 180 BPM
+  only**.
+- Convert **all other source tempos** before use. This includes 45, 135 and 270
+  BPM. The initial rule gave different treatment to multiples of 45 BPM. The new
+  decision replaces that rule.
+- Complete the necessary time stretching and pitch shifting before you set
+  `ready` status. Do this work in the background.
+- Keep major and mixed-key imports in review. Use only compatible sections in
+  the first release. A pitch shift of the full signal does not change its
+  musical mode.
 
-### Proposed precise behavior
+### Recommended behavior
 
-Use 4/4 time, integer musical ticks at 960 ticks per quarter note, and a default
-one-bar snap. Offer beat and sixteenth-note snap. Derive seconds from absolute
-ticks rather than repeatedly adding rounded clip durations.
+Use 4/4 time. Use integer musical ticks at 960 ticks for each quarter note. Set
+the initial snap interval to one bar. Also give the user beat and sixteenth-note
+snap intervals. Calculate seconds from absolute ticks. Do not add rounded clip
+durations again and again to calculate a position.
 
-Keep 90 BPM loops at their natural speed as half-time material. Four source
-beats at 90 BPM occupy eight arrangement beats at 180 BPM. An eight-beat 180 BPM
-loop occupies eight arrangement beats. Neither needs a speed or pitch change to
-fit.
+Keep 90 BPM loops at their natural speed as half-time audio. Four source beats
+at 90 BPM occupy eight arrangement beats at 180 BPM. An eight-beat 180 BPM loop
+occupies eight arrangement beats. A change of speed or pitch is not necessary
+for these loops.
 
-For a rhythmic import, suggest the target in `{90, 180}` that minimizes
-`abs(log2(targetBpm / sourceBpm))`; prefer 180 on a tie. Allow the user to
-choose the other supported target before processing. Preserve the source beat
-count:
+For a rhythmic import, recommend the target in `{90, 180}` with the smallest
+value of `abs(log2(targetBpm / sourceBpm))`. If the values are equal, recommend
+180 BPM. Let the user select the other supported target before conversion. Keep
+the source beat count:
 
 - `outputDuration = sourceDuration * sourceBpm / targetBpm`.
 - `arrangementBeats = sourceBeats * 180 / targetBpm`.
-- Pitch and tempo are independent processing parameters.
+- Set pitch and tempo independently.
 
-| Source                           | Preparation                                               | Placement at 180 BPM        |
-| -------------------------------- | --------------------------------------------------------- | --------------------------- |
-| 180 BPM, C minor, 4 source beats | Validate; no musical transform                            | 4 arrangement beats         |
-| 90 BPM, C minor, 4 source beats  | Validate; keep half-time                                  | 8 arrangement beats         |
-| 135 BPM, D minor, 4 source beats | Suggest 180 BPM; shift down 2 semitones                   | 4 arrangement beats         |
-| 45 BPM, C minor, 4 source beats  | Suggest 90 BPM                                            | 8 arrangement beats         |
-| 270 BPM, C minor, 4 source beats | Suggest 180 BPM                                           | 4 arrangement beats         |
-| Major or mixed-key phrase        | Review; isolate a compatible section and analyze it again | Unavailable until validated |
+| Source                           | Preparation                                                                         | Position at 180 BPM            |
+| -------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------ |
+| 180 BPM, C minor, 4 source beats | Validate the sample. No musical conversion is necessary.                            | 4 arrangement beats            |
+| 90 BPM, C minor, 4 source beats  | Validate the sample. Keep half-time playback.                                       | 8 arrangement beats            |
+| 135 BPM, D minor, 4 source beats | Recommend 180 BPM. Shift the pitch down 2 semitones.                                | 4 arrangement beats            |
+| 45 BPM, C minor, 4 source beats  | Recommend 90 BPM.                                                                   | 8 arrangement beats            |
+| 270 BPM, C minor, 4 source beats | Recommend 180 BPM.                                                                  | 4 arrangement beats            |
+| Major or mixed-key phrase        | Keep the phrase in review. Select a compatible section. Analyze that section again. | No placement before validation |
 
-Detection must expose uncertainty, especially 90/180 half-time ambiguity. Do not
-claim that a beat detector can infer intent or that a key detector proves every
-note is compatible. Store source metadata, measured evidence, confidence, manual
-corrections, and prepared values separately.
+Show uncertainty in detector results, especially the difference between 90 BPM
+and 180 BPM. A beat detector cannot know the intended tempo in all cases. A key
+detector cannot prove that each note is compatible. Store source metadata,
+measurements, confidence scores, manual corrections and prepared values
+independently.
 
-For minor-key tonal material, transpose to C using the nearest signed semitone
-offset; retain a deliberate octave override. Treat C natural minor as the
-initial analysis reference, with harmonic/melodic-minor phrases flagged for
-musical review. Keep original audio. Never mark a result as C minor simply
-because processing ran.
+For tonal audio in a minor key, transpose to C with the nearest signed semitone
+offset. Keep an explicit octave adjustment for the user. Use C natural minor as
+the initial analysis reference. Mark harmonic-minor and melodic-minor phrases
+for musical review. Keep the source audio. Do not set C-minor metadata only
+because conversion completed.
 
-Proposed exception for non-tonal material: drums, noise, and unpitched effects
-are key-neutral and need no pitch shift. A rhythmic drum loop still needs a
-valid 90/180 tempo. A free one-shot has no measured BPM; assign a 180 BPM
-placement context and preserve its transient/duration. Tuned percussion still
-needs pitch review. This classification is an open policy choice in section 9.
+This plan recommends different treatment for non-tonal audio: drums, noise and
+unpitched effects. These sounds are key-neutral. A pitch shift is not necessary.
+A rhythmic drum loop must have a valid tempo of 90 or 180 BPM. A one-shot is a
+sound for one playback, not a loop. A free one-shot has no measured BPM.
+
+Give a free one-shot a 180 BPM placement context. Keep its transient and
+duration. Pitch review is necessary for tuned percussion. Section 9 contains
+this open decision about sound classes.
 
 ## 3. Workspace and interaction
 
-Use a stable composition workspace. The arranger is the main surface; the
-library and inspector support it. Avoid floating panels that move while editing
-clips.
+Use a composition workspace with fixed panels. The arranger is the primary panel
+for clip positions. The library and inspector support this panel. Do not move
+panels during clip edits.
 
 ```text
 RaveFold | Project / Save / Export | Transport | 180 BPM / C minor | Skin
@@ -114,82 +126,103 @@ Preview and status  |               | Playhead               | Preparation
 Track mixer and master meter              | Import progress / storage state
 ```
 
-Keep transport visible. Show sample name, category, source/prepared tempo, key
-status, length and readiness in the library. Provide a waveform and detailed
-provenance in the inspector. Keep processing internals out of ordinary controls.
+Keep the transport controls in view. These controls start, stop and position
+playback. Show the sample name, category, source tempo, prepared tempo, key
+status, length and preparation status in the library. Give the inspector a
+waveform and source-history details. Do not show internal processor details in
+usual controls.
 
-Insertion shows a snapped ghost and affected track. Use one active clip per
-track in the first release. Reject overlaps with a clear conflict indication;
-require an explicit replace action to remove an existing clip. Resizing can
-repeat a loop or trim a region through distinct handles/modes. Use short
-boundary fades where appropriate, without moving the musical onset or hiding bad
-loop markers.
+Show an insertion outline at the snap position on the selected track. Use one
+active clip on each track in the first release. Reject overlaps with a clear
+overlap indication. Let the user replace an existing clip only through an
+explicit replacement command.
 
-The preview is exclusive: starting another preview stops the previous one. A
-ready-loop preview can start on the next bar during playback. Source audition in
-the review inspector is separate from the arrangement and does not confer
-readiness.
+Give loop repetition and region trim different handles or modes. Use short fades
+at boundaries where necessary. Do not move the musical onset or hide defective
+loop markers. The onset is the start of the sound.
 
-Provide keyboard commands for transport, insertion, movement, duplication,
-deletion, undo/redo, and escaping an operation. Controls need visible focus and
-accessible labels. Color identifies sound roles, but labels and icons carry the
-same meaning. Announce import results without announcing every meter update.
+Play only one preview at a time. A new preview stops the previous preview.
+During playback, a loop with `ready` status can start its preview at the next
+bar. Source audition in the review inspector stays separate from the
+arrangement. Audition alone does not give a sample `ready` status.
 
-At 1280 x 720, collapse the inspector before shrinking the arranger. At narrower
-widths, use library/arranger/mixer views. Phone layouts may browse and preview,
-but full touch editing is outside the initial release promise. Verify 200% zoom,
-keyboard operation, contrast and focus in every skin.
+Give keyboard commands for transport, insertion, movement, duplication,
+deletion, undo, redo and exit from an operation. Give controls clear focus
+indicators and labels that support accessibility. Use color to identify sound
+roles. Give labels and icons the same meaning as the colors. Announce import
+results, but not each meter update.
+
+At 1280 x 720, close the inspector panel before you decrease the arranger width.
+At smaller widths, give the library, arranger and mixer different views. Phone
+layouts can show the library and previews. Full touch editing is not part of the
+first release. Do tests of 200% zoom, keyboard operation, contrast and focus in
+each skin.
 
 ### Six skins, one set of controls
 
 Use all six presets in the
-[private technology specification](research.md#binding-technology-requirements).
-They are reference-demo configuration entries, not exported package presets.
-Create a typed RaveFold registry from pinned defaults plus each preset patch.
-Keep required license notices with copied material. The descriptions below are
-neutral references, not replacements for the required preset definitions.
+[private technology specification](research/local-research.md#binding-technology-requirements).
+The presets are entries in the reference demo configuration. The package does
+not export them as preset objects. Make a typed registry from the fixed defaults
+and each preset patch. Keep the necessary license notices with copied material.
+The neutral descriptions below do not replace the preset definitions.
 
-| Skin        | Character                                         |
-| ----------- | ------------------------------------------------- |
-| Reference 1 | Clear surfaces and an iridescent rim              |
-| Reference 2 | Dark frosted surfaces; proposed first-run default |
-| Reference 3 | Opaque surfaces and subdued effects               |
-| Reference 4 | Clear refractive surfaces                         |
-| Reference 5 | Pink edges and a dark energetic palette           |
-| Reference 6 | Strong movement and ambient effects               |
+| Skin        | Appearance                                            |
+| ----------- | ----------------------------------------------------- |
+| Reference 1 | Clear surfaces and edges with colors that change      |
+| Reference 2 | Dark frosted surfaces. Recommended initial selection. |
+| Reference 3 | Surfaces that are not transparent, with fewer effects |
+| Reference 4 | Clear surfaces with refraction                        |
+| Reference 5 | Pink edges and dark colors                            |
+| Reference 6 | Large movements and ambient effects                   |
 
-Keep layout, semantic sound colors, focus treatment and commands stable across
-skins. Put opaque or sufficiently backed text and waveforms above the material.
-Remember the selected skin as a user preference, separately from project audio.
+Keep the layout, sound-role colors, focus indication and commands the same in
+all skins. Use text backgrounds that are not transparent, or give sufficient
+contrast above the material. Give waveforms sufficient contrast too. Save the
+skin selection as a user preference, separate from project audio.
 
-Use the material library on approximately five to eight major panels, not
-individual clips, rows, meters or waveform segments. Its documented default
-surface budget is 16. Scrolling happens inside panels. Keep dialogs semantic DOM
-with simple backing unless a second WebGL pass proves affordable.
-[Private source evidence](research.md)
+Use the material library on approximately five to eight primary panels. Do not
+use a material surface for each clip, row, meter or waveform segment. The
+documented default limit is 16 surfaces. Keep scrolling inside panels. Use
+semantic DOM dialogs with simple backgrounds unless measurements support a
+second WebGL render pass. [Private source evidence](research/local-research.md)
+gives the library limits.
 
-Provide Full, Reduced and Static effects settings for all six skins. Static uses
-the same tokens with CSS surfaces and does not mount the material renderer.
-Reduced-motion preference defaults to Static, with an explicit user override.
-The material library's reduced motion still runs animation; `canvas={false}`
-only changes canvas placement. Neither is a renderer-off switch. Skin changes
-must never recreate the audio engine. [Private source evidence](research.md)
+Give all six skins Full, Reduced and Static effects settings. Static uses the
+same style tokens with CSS surfaces. Do not mount the material renderer in
+Static mode. Select Static when the user prefers reduced motion. Let the user
+change this selection explicitly.
+
+The library continues its animation in reduced-motion mode. The `canvas={false}`
+setting changes canvas placement only. The two settings do not stop the
+renderer. A skin change must not make a new audio engine.
+[Private source evidence](research/local-research.md) gives the renderer
+behavior.
 
 ## 4. Technical design
 
-Use the required component framework and material library from the
-[private technology specification](research.md#binding-technology-requirements),
-with the proposed typed language and build tool recorded there. Pin tested
-versions and a lockfile at implementation time. Use public components and hooks;
-do not rely on renderer internals. Exact compatibility requirements remain in
-private research and must be checked before dependency installation.
+Use the typed language, compiler major version 7, component framework and
+material library from the private specification. The
+[private technology specification](research/local-research.md#binding-technology-requirements)
+also identifies the recommended build tool. Use tested dependency versions with
+no version ranges in the lockfile. Use public components and hooks. Do not use
+internal renderer interfaces. Before dependency installation, examine the
+compatibility requirements in private research.
+
+Write project-owned UI, domain, audio, worker, test and tool source in `.ts` or
+`.tsx`. Use strict type checking with `allowJs: false`. Use the fixed major-7
+compiler for the type check. Build-time transpilation alone is not a type check.
+Generated browser output and third-party DSP binaries are runtime artifacts.
+
+Give application, worker and tool source different compiler environments when
+you add those files. The current compiler configuration covers tools only.
 
 ```mermaid
 flowchart LR
   UI[Workspace and material skins] --> Commands[Project commands and undo]
   Commands --> Project[Versioned musical project]
   Project --> Engine[Audio engine and scheduler]
-  Files[User-selected files] --> Queue[Durable import queue]
+  Files[User-selected files] --> Queue[Saved import queue]
   Queue --> Worker[Analysis and DSP worker]
   Worker --> Store[Prepared assets and metadata]
   Store --> Engine
@@ -199,126 +232,149 @@ flowchart LR
   Store --> Export
 ```
 
-| Boundary                 | Responsibility                                                            |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `domain/`                | Pure project model, ticks, clip edits, command history, schema validation |
-| `audio/`                 | Audio graph, absolute-time scheduling, transport, preview, render graph   |
-| `import/` and `workers/` | File inspection, analysis, transformation, queue and cancellation         |
-| `storage/`               | IndexedDB metadata, OPFS files, recovery, archive import/export           |
-| `ui/` and `skins/`       | Component controls, virtualized library/timeline, theme adapter           |
-| `catalog/`               | Source manifest, categories, stereo pairs, corrections and provenance     |
+| Directory                | Function                                                                      |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `domain/`                | Pure project model, ticks, clip edits, command history and schema validation  |
+| `audio/`                 | Audio graph, scheduling by absolute time, transport, preview and render graph |
+| `import/` and `workers/` | File checks, analysis, conversion, queue and cancellation                     |
+| `storage/`               | IndexedDB metadata, OPFS files, recovery, archive import and archive export   |
+| `ui/` and `skins/`       | Component controls, virtualized library and timeline, and theme adapter       |
+| `catalog/`               | Source manifest, categories, stereo pairs, corrections and source history     |
 
-Start with Web Audio buffer sources and native gain/pan nodes. Schedule against
-`AudioContext.currentTime`, using an initial 25 ms scheduler tick and 200 ms
-look-ahead as values to benchmark. UI updates and `requestAnimationFrame` never
-trigger note timing. Handle seek, pause, loop wrap and edits by cancelling stale
-scheduled voices and rebuilding from the selected musical position. Cap voices
-and smooth gain changes. Meter rendering may drop frames; audio must not.
+Start with Web Audio buffer sources and native gain and pan nodes. Use
+`AudioContext.currentTime` as the scheduling clock. Measure an initial scheduler
+interval of 25 ms and a look-ahead period of 200 ms. Do not use UI updates or
+`requestAnimationFrame` to start notes.
 
-Resume audio from an explicit user gesture. Handle suspended contexts and output
-device changes visibly. Propose pausing transport when the page becomes hidden
-for the first release, avoiding a promise of uninterrupted background playback.
-Record the transport position and require explicit resume. A future AudioWorklet
-scheduler must earn its complexity through measured need, not be assumed
-necessary for preprocessed sample playback.
-[Private source evidence](research.md)
+For seek, pause, loop wrap or edits, cancel voices that no longer match the
+arrangement. Schedule new voices from the selected musical position. Limit the
+number of voices. Make gain changes smooth. The meter display can skip frames,
+but audio playback must continue without interruptions.
 
-Use a Worker plus a WASM DSP kernel for preparation. Prototype the first
-candidate recorded in
-[private research](research.md#browser-audio-and-storage-evidence), which
-supports independent stretch and pitch processing. Prove a Worker-compatible
-offline interface and latency/tail handling before selecting a package or
-compiling an adapter. The existence of a web wrapper does not prove it runs
-unchanged in a Worker. Retain the applicable license obligations.
+Start or resume audio only after an explicit user command. Show suspended audio
+contexts and output-device changes clearly. For the first release, this plan
+recommends a transport pause when the page becomes hidden. Save the transport
+position at that time. Let the user resume explicitly. Do not promise continuous
+background playback.
 
-Do not substitute `AudioBufferSourceNode.playbackRate` for pitch-preserving time
-stretching: it resamples and couples speed to pitch. Standard ready playback is
-at rate 1. Prefer a single-threaded WASM build with transferable buffers so the
-baseline does not depend on SharedArrayBuffer or special isolation headers.
-[Private source evidence](research.md)
+Use an AudioWorklet scheduler only if measurements show that it is necessary for
+prepared samples. [Private source evidence](research/local-research.md) gives
+the audio API behavior.
 
-## 5. Import and catalog pipeline
+Use a Worker and a WASM DSP kernel for sample preparation. DSP means digital
+signal processing. First, do a test of the candidate in
+[private research](research/local-research.md#browser-audio-and-storage-evidence).
+It supports time stretching and pitch shifting independently.
 
-Rebuild the supplied library manifest from actual headers and confirmed loop
-boundaries. Preserve source metadata unchanged as provenance. Resolve catalog
-discrepancies, boundary outliers and stereo pairing before bulk import. Counts,
-specific filenames, inspection methods and measured findings remain in
-[private research](research.md#supplied-sample-library).
+Before package selection, do a test of its offline interface in a Worker. Also
+do tests of latency and audio tails. Write an adapter only after these tests
+show the necessary interface. A web wrapper alone does not prove Worker
+compatibility. Keep the applicable license obligations.
 
-The browser cannot open machine-local folders automatically. Offer user-selected
-files and folder import where supported, with multi-file selection and portable
-archives as fallbacks. A separate local catalog command may read
-`APP_INSTALL_DIR` and `SAMPLES_DIR` from the ignored `.env.local` during
-development. Never expose those values in client environment variables, logs,
-documentation, manifests, archives or the browser build. Store only relative
-paths and source IDs as provenance. Do not copy the whole sample library into
-public assets or the repository. Recover display names from the installed
-catalog for private local use. Account for catalog gaps and candidate stereo
-pairs before declaring the library migration complete; matching filenames alone
-do not prove channel alignment. Exact names and findings stay in private
-research and local user data.
+Do not use `AudioBufferSourceNode.playbackRate` for time stretching that must
+keep the pitch constant. That property resamples the source and changes speed
+and pitch together. Use playback rate 1 for usual playback of prepared samples.
+This plan recommends a single-threaded WASM build with transferable buffers.
+SharedArrayBuffer and special isolation headers are then not necessary for the
+minimum supported system. [Private source evidence](research/local-research.md)
+gives the playback behavior.
+
+## 5. Import and catalog process
+
+Make the library manifest again from file headers and loop boundaries with
+approval. Keep the source metadata unchanged as source history. Resolve catalog
+differences, unusual boundaries and stereo pairs before a full library import.
+Keep counts, filenames, methods and measurements in
+[private research](research/local-research.md#supplied-sample-library).
+
+The browser cannot open local folders automatically. Let the user select files
+and, where supported, folders. Also support selection of multiple files and
+portable archives. A local catalog command can read `APP_INSTALL_DIR` and
+`SAMPLES_DIR` from the ignored `.env.local` during development.
+
+Do not copy these values into client environment variables, logs, documents,
+manifests, archives or browser output. Store only relative paths and source IDs
+as source history. Do not put the full sample library in public assets or the
+repository. Recover display names from the installed catalog for private local
+use.
+
+Account for catalog gaps and possible stereo pairs before you mark the library
+conversion complete. Equal filenames do not prove channel alignment. Keep source
+names unchanged in private research and local user data. Keep results there too.
 
 ```text
 selected -> queued -> decoding -> analyzing -> transforming -> validating -> ready
                                   |                              |
                                   +-> needs-review <-------------+
 Any active phase -> failed or cancelled
-Interrupted jobs -> queued on reopen, after checking stored input
+Interrupted jobs -> queued on reopen, after a check of stored input
 ```
 
-1. Validate file type, byte size and supported format; hash the original bytes.
-   MVP guarantees WAV PCM16/24 and float32, mono/stereo. Other codecs wait for a
-   browser-decoder compatibility check. Start with proposed per-file limits of
-   five minutes decoded audio and 100 MiB input; report oversized files clearly.
-2. Save the immutable original and a durable job record before processing. Parse
-   guaranteed WAV formats in the Worker. For optional codecs, use a bounded
-   decoder adapter; do not assume `decodeAudioData` is available in a Worker.
-3. Analyze BPM, phrase boundaries, tuning, root, mode and tonal/non-tonal class.
-   Validate declared metadata first. Select the detector and confidence
-   thresholds only after a labeled corpus test; no detector is selected in this
-   plan.
-4. Ask for source BPM, key or loop markers when confidence is insufficient.
-   Known OG provenance supplies a declared 180 BPM/C-minor baseline, not proof
-   that every file is a clean loop or individually tonal. Major/mixed-key
-   sections stay in review until trimmed to compatible material and reanalyzed.
-5. Prepare an approved 90/180 target. Change duration without changing pitch and
-   pitch without changing the approved duration. Preserve stereo phase using
-   joint channel processing. Remove DSP pre-roll and account for tails
-   explicitly.
-6. Verify output length, finite samples, valid channels, clipping, boundaries
-   and analysis status. Store transformation parameters, algorithm/version,
-   output hash and measurements. Readiness requires a complete validated
-   derivative.
-7. Write the derivative completely before committing its ready metadata. The
-   catalog and arranger must never expose partial output. Keep incomplete files
-   recoverable or collect them after a safe cleanup pass.
+1. Validate the file type, byte size and supported format. Calculate a hash from
+   the source bytes. The first release supports WAV PCM16/24 and float32, with
+   mono or stereo channels. Do a browser-decoder compatibility test before you
+   add other codecs. Initial recommended limits per file are five minutes of
+   decoded audio and 100 MiB of input. Give a clear error for a file above these
+   limits.
+2. Save the source file unchanged. Save a durable job record before audio
+   preparation. Parse the supported WAV formats in the Worker. Use a decoder
+   adapter with resource limits for other codecs. Do not assume that a Worker
+   has `decodeAudioData`.
+3. Analyze BPM, phrase boundaries, tuning, root, mode and tonal class. Validate
+   declared metadata first. Do a test with a labeled audio corpus before you
+   select a detector and confidence thresholds. A corpus is the collection of
+   audio examples for these tests. This plan does not select a detector.
+4. If confidence is too low, get the source BPM, key or loop markers from the
+   user. OG source information declares 180 BPM and C minor. This declaration
+   does not prove that each file is tonal or has correct loop boundaries. Keep
+   major and mixed-key sections in review. Analyze them again after the user
+   selects compatible sections.
+5. Prepare a selected 90 BPM or 180 BPM target. Change duration without a pitch
+   change. Change pitch without a change to the target duration. Process stereo
+   channels together to keep their phase relationship. Remove DSP pre-roll.
+   Account for audio tails explicitly.
+6. Validate output length, finite sample values, channels, clipping, boundaries
+   and analysis status. Save the transformation parameters, algorithm, version,
+   output hash and measurements. A derivative is an audio file that results from
+   this preparation. Set `ready` status only for a complete derivative that
+   passes validation.
+7. Write the complete derivative before its metadata transaction sets `ready`
+   status. Do not show partial output as a usable asset in the catalog or
+   arranger. Keep incomplete files for recovery, or remove them in a safe
+   cleanup operation.
 
-No-transform imports still pass validation. Deduplicate jobs by original
-content, selected region, target BPM, pitch settings and processor version. A
-changed setting creates a new derivative and cannot overwrite audio used by an
-existing project. Recompute derived waveforms and markers when their inputs
-change.
+Validate imports when no transformation is necessary too. Deduplicate jobs by
+source content, selected region, target BPM, pitch settings and processor
+version. A change of settings makes a new derivative. Do not overwrite audio
+that an existing project uses. Calculate waveforms and markers again when their
+inputs change.
 
-Start with one heavy job at a time and prioritize playback resources. Show
-phase, progress when measurable, cancel, retry and actionable errors.
-Cancellation must stop work and prevent a late result from becoming ready. Chunk
-long work so the Worker can process cancellation, or terminate and recreate it
-safely.
+Start with one resource-intensive job at a time. Give playback priority for
+resources. Show the job phase and measurable progress. Give cancel and retry
+controls. Give errors with a clear next action.
 
-Here, background means asynchronous work while the browser session can run.
-Closing the tab or OS suspension can stop processing. Persist the queue, retain
-completed files, and restart interrupted work on reopen. Do not promise that a
-service worker will finish an arbitrarily long DSP job after the tab closes.
+Cancellation must stop the work and prevent a late result from a change to
+`ready` status. Divide long work into blocks so that the Worker can process
+cancellation. As an alternative, stop the Worker. Make a new Worker safely.
+
+Background work here means asynchronous work while the browser session can
+operate. A closed tab or a suspended operating system can stop the work. Save
+the queue and completed files. When the session opens again, start interrupted
+work again. Do not promise that a service worker will finish a long DSP job
+after the tab closes.
 
 ## 6. Projects, storage and export
 
-Use IndexedDB for searchable metadata, project revisions and jobs; use OPFS for
-large originals and prepared files, with a bounded IndexedDB Blob fallback.
-Offer storage estimates, handle quota errors and request persistent storage when
-appropriate. Browser storage is not a backup; clear-site-data can delete it.
-[Private source evidence](research.md), [Private source evidence](research.md)
+Use IndexedDB for searchable metadata, project revisions and jobs. Use OPFS for
+large source files and prepared files. Give a bounded IndexedDB Blob storage
+alternative. Show storage estimates. Give clear messages for quota errors.
+Request persistent storage where applicable.
 
-| Record         | Essential fields                                                                                                           |
+Browser storage is not a backup. Site-data deletion can remove this storage.
+[Private source evidence](research/local-research.md) gives the storage
+behavior.
+
+| Record         | Necessary fields                                                                                                           |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | Project        | schema version, stable ID, revision, fixed BPM/key, meter/ticks, tracks, clips, loop region                                |
 | Track          | stable ID, order, name, gain, pan, mute, solo                                                                              |
@@ -327,134 +383,270 @@ appropriate. Browser storage is not a backup; clear-site-data can delete it.
 | Prepared asset | source region, target tempo/key or neutral class, processor version/settings, hash, frames, channels, loop markers, status |
 | Job            | inputs, phase, retry/cancel state, progress, error and completed output references                                         |
 
-Keep musical project state independent of UI components, filenames and skin
-selection. Validate loaded documents and provide explicit schema migrations.
-Autosave a new valid revision transactionally; keep the last known-good
-revision. Use an asset-write/metadata-commit protocol because OPFS and IndexedDB
-do not share a transaction. Prevent simultaneous editing by two tabs or open the
-second read-only.
+Keep musical project state separate from UI components, filenames and skin
+selection. Validate documents on load. Give explicit schema migrations. Autosave
+each valid new revision in a transaction. Keep the last valid revision.
 
-Use a proposed `.ravefold` archive containing versioned JSON, checksums and the
-referenced prepared audio. Include original source regions/files only through an
-explicit option when needed for reprocessing. A JSON-only reference export can
-require relinking; distinguish it clearly from a portable project. Validate
-archive paths, expansion sizes and checksums before writing imported content.
+Write the audio asset before the metadata commit. OPFS and IndexedDB do not
+share a transaction. Do not let two tabs edit the same project at the same time.
+As an alternative, open the second tab in read-only mode.
 
-Keep the full library on disk, not decoded in memory. Decode and cache the
-visible preview and current arrangement working set. Use the capacity evidence
-in private research, then measure the prototype before choosing fixed cache
-limits. Do not load all samples merely to show library rows.
+This plan recommends a `.ravefold` archive with versioned JSON, checksums and
+referenced prepared audio. Include source regions or files only when the user
+selects that option for subsequent reprocessing. File relinking can be necessary
+for a JSON-only reference export. Make its difference from a portable project
+clear. Before a write of imported content, validate archive paths, expanded
+sizes and checksums.
 
-Render stereo WAV through the same graph builder and clip timing rules used for
-playback, using `OfflineAudioContext` and a Worker encoder. Propose 44.1 kHz,
-16-bit WAV with dither, with explicit range/tail handling and clipping warnings.
-Resampling between asset and device rates must preserve seconds and musical
-ticks. Do not advertise true-peak limiting without an implementation and
-verification. Prototype export memory and cancellation before committing to a
+Keep the full library on disk. Do not decode the full library into memory.
+Decode and cache only the visible preview and the current arrangement's working
+set. Use the capacity evidence in private research. Measure the prototype before
+you select fixed cache limits. Do not load all samples only to show library
+rows.
+
+Use the same graph builder and clip timing rules for playback and stereo WAV
+export. Render with `OfflineAudioContext` and a Worker encoder. This plan
+recommends 44.1 kHz, 16-bit WAV with dither. Set an explicit export range and
+audio-tail rule. Give clipping warnings.
+
+Keep seconds and musical ticks unchanged during resampling between asset and
+device rates. Do not claim true-peak limiting without an implementation and its
+test results. Do tests of export memory use and cancellation before you set a
 maximum song length.
 
-## 7. Delivery sequence and acceptance gates
+## 7. Delivery sequence and acceptance tests
 
-Each milestone depends on the preceding gate. These are deliverables, not
-elapsed time estimates. Do not build the full workspace before resolving DSP
-feasibility.
+All acceptance tests must give correct results before the next milestone starts.
+These milestones specify results, not elapsed time estimates. Do not build the
+full workspace until DSP test results show that the design can operate
+correctly.
 
-| Milestone                 | Deliverable                                                                                                                                                                                   | Exit evidence                                                                                                                                                                                                              |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0: Contracts and catalog | Resolve product policies in section 9 and define M1 evaluation criteria; version musical/import/project contracts; generate private asset manifest; confirm stereo pairs and outliers         | Every supplied WAV is accounted for with header-derived timing; uncertain entries remain explicitly unready; no source file changed; corpus coverage/review criteria recorded; measured technical selections remain for M1 |
-| M1: Audio and DSP proof   | Minimal headless browser harness, 180 BPM scheduler, 90 half-time playback, detector-corpus trial, Worker stretch/pitch and export prototype; representative material panels with six presets | Correct tempo/duration and pitch on labeled fixtures; repeated loop/seek tests; cancellation/reload recovery; measured concurrent playback/DSP/material UI CPU and memory; listening review and corpus coverage results    |
-| M2: Workspace             | Application shell, library, arranger, command undo, accessible editing and six actual presets                                                                                                 | Insert/edit a short arrangement with pointer and keyboard; all six skins retain control behavior and audio continuity; CSS fallback works                                                                                  |
-| M3: Full import           | Persistent queue, analysis/review UI, prepared asset cache, pairing and batch ingestion                                                                                                       | 45/90/135/180/270 BPM cases, minor transposition, major/mixed-key hold, corrupt input, stereo, retry and quota cases pass                                                                                                  |
-| M4: Save and export       | Autosave/recovery, portable archives, relinking, offline stereo WAV                                                                                                                           | Reopen in a clean browser profile; exact project data and assets survive; export matches arrangement timing and mixer state                                                                                                |
-| M5: Release validation    | Production build, static hosting configuration, performance and accessibility validation                                                                                                      | Browser matrix, workload targets, import/playback contention, six-skin checks, recovery and export checks all recorded; remaining limits documented                                                                        |
+### M0: Contracts and catalog
 
-M1 establishes feasibility before selecting a BPM/key detector, final DSP
-package, runtime cache limits or release hardware floor. M2 may reuse that
-prototype, but temporary harness code becomes maintained test tooling or is
-removed.
+Make the product decisions in section 9. Set the criteria for M1 tests. Give
+versions to the musical, import and project contracts. Generate a private asset
+manifest. Examine stereo pairs and unusual timing values.
 
-Before M1, define a labeled corpus spanning every supplied category, short
-one-shots, stereo pairs, the identified timing outliers, and controlled external
-imports. Agree the minimum usable preparation coverage and maximum manual-review
-burden for each class during M0. M1 must report correct-ready, false-ready,
-review and unusable outcomes separately; a high acceptance rate alone cannot
-establish quality.
+Acceptance evidence:
+
+- A header-derived timing record for each supplied WAV.
+- No `ready` status for uncertain entries.
+- No change to source files.
+- Criteria for corpus coverage and manual review.
+- Technical selections that depend on measurements stay open until M1.
+
+### M1: Audio and DSP proof
+
+Build a small headless browser test program. Add the 180 BPM scheduler and 90
+BPM half-time playback. Do a detector test with the labeled corpus. Add Worker
+time stretching, pitch shifting and an export prototype. Add representative
+material panels with all six presets.
+
+Acceptance evidence:
+
+- Correct tempo, duration and pitch for labeled fixtures.
+- More than one loop and seek test.
+- Cancellation and reload recovery tests.
+- CPU and memory measurements for playback, DSP and the material UI at the same
+  time.
+- Listening review and corpus coverage results.
+
+### M2: Workspace
+
+Build the application shell, library and arranger. Add command undo and
+accessible editing. Add the six reference presets.
+
+Acceptance evidence:
+
+- A short arrangement that the user can insert and edit with both a pointer and
+  a keyboard.
+- The same control behavior and continuous audio in all six skins.
+- A functional CSS fallback.
+
+### M3: Full import
+
+Add the persistent queue, analysis and review interface, prepared-asset cache,
+stereo pairing and batch import.
+
+Acceptance evidence:
+
+- Correct results from the 45/90/135/180/270 BPM tests.
+- Minor-key transposition and review holds for major and mixed-key audio.
+- Correct results for corrupt input, stereo, retry and quota errors.
+
+### M4: Save and export
+
+Add autosave, recovery, portable archives, file relinking and offline stereo WAV
+export.
+
+Acceptance evidence:
+
+- A project that opens in a clean browser profile with the same data and assets.
+- Export timing that matches the arrangement.
+- Export audio that matches the mixer state.
+
+### M5: Release tests
+
+Make the production build and static hosting configuration. Do performance and
+accessibility tests.
+
+Acceptance evidence:
+
+- Results for the browser matrix and workload targets.
+- Tests of imports during playback.
+- Tests for all six skins, recovery and export.
+- A document that gives the remaining limits.
+
+Use M1 results to select the detector, DSP package, cache limits and minimum
+release hardware. M2 can use code from the prototype. Keep temporary test code
+only if it becomes part of the maintained test tools. Remove other temporary
+test code.
+
+Before M1, select a labeled corpus with these groups:
+
+- Each supplied category.
+- Short one-shots.
+- Stereo pairs.
+- Unusual timing values.
+- Controlled external imports. During M0, get approval for minimum usable
+  coverage and maximum manual-review work for each class. In M1, record correct
+  `ready`, incorrect `ready`, review and unusable results as different groups. A
+  high acceptance rate alone does not prove quality.
 
 ## 8. Verification and release targets
 
-Use the proposed unit-test runner for pure musical calculations, command
-history, state transitions, project schemas and migrations. Use headless browser
-automation against the production build for integration and visual checks. Keep
-private OG material out of public CI: use generated signals and distributable
-fixtures there, with a separate local corpus suite for the supplied library.
+Use the recommended unit-test runner for musical calculations, command history,
+state transitions, project schemas and migrations. Use headless browser
+automation on the production build for integration and visual tests. Keep
+private OG material out of public CI. Use generated signals and samples with
+distribution permission in public tests. Keep a different local test suite for
+the supplied library.
 
-Proposed desktop release coverage: current and previous stable versions of the
-desktop browsers named in the private technology specification. Record exact
-versions in private test evidence. The first prototype browser is not the only
-claimed supported browser. Automated engine coverage does not replace
-verification in each actual release browser. Mark unavailable environments
-unverified.
+This plan recommends current and previous stable releases of the desktop
+browsers in the private specification. Record the browser version numbers in
+private test evidence. The first prototype browser is not the full release
+matrix. An automated browser engine does not replace a test in each actual
+release browser. Mark unavailable environments as unverified.
 
-The production baseline is HTTPS static hosting with Worker/WASM assets served
-from the app origin. Test a built artifact with correct MIME types, asset paths
-and CSP, without a development server or required cross-origin isolation.
-Include WebGL2 loss/unavailability, no folder picker, denied persistence,
-exhausted quota, interrupted imports, missing assets and suspended audio.
+Use HTTPS static hosting with Worker and WASM assets from the app origin. Do a
+test of the built application with correct MIME types, asset paths and CSP. Do
+not use a development server for this test. Cross-origin isolation must not be
+necessary for the minimum hosting configuration.
 
-All numbers below are proposed acceptance targets, **not measured results**:
+Do tests for these conditions:
 
-| Check                    | Fixture and target                                                                                                                                                                                |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Musical timing           | Synthetic impulses over 10 minutes, 44.1/48 kHz renders, loop and seek: onset error <=1 output sample against the mathematical schedule; no accumulating drift                                    |
-| Transformation           | Known BPM/key signals: length within 1 frame of the selected region target after latency compensation; sustained test-tone pitch within 5 cents; joint stereo alignment retained                  |
-| Musical quality          | Local review of bass, kicks, breaks, pads, vocals, FX and split stereo at representative and extreme ratios; record artifacts and reject unusable derivatives                                     |
-| Editing load             | 32 tracks, 4,096 clips, 256 bars, complete catalog metadata: selection/drag response p95 <50 ms; no import-caused main-thread task >50 ms                                                         |
-| Playback contention      | 32 simultaneous voices plus preview, waveform scrolling, one active conversion and every skin including the most animated reference for 10 minutes: no detected missed onsets or audible dropouts |
-| Import accuracy          | Labeled corpus covering 90/180 ambiguity, off-grid recordings, minor/major/mixed/unpitched material; publish errors and review rates before setting readiness thresholds                          |
-| Recovery and portability | Kill/reload in each import/save phase; preserve last valid project; no ready partial asset; reopen a portable archive with browser storage cleared                                                |
-| Accessibility            | Automated checks plus manual keyboard/focus/zoom review in six skins, Full/Reduced/Static effects and forced-colors where supported                                                               |
+- WebGL2 loss or no WebGL2.
+- No folder picker.
+- Denied persistent storage.
+- Exhausted storage quota.
+- Interrupted imports.
+- Missing assets.
+- Suspended audio.
 
-Benchmark on a documented machine with integrated graphics and 8 GB RAM as a
-candidate floor. Record CPU/GPU, RAM, OS, browser, output device, sample rate,
-build, workload and method. Headless timing and screenshots do not establish
-real-device listening quality or GPU performance. Choose final limits from
-results.
+These numbers are recommended acceptance targets, **not measured results**.
 
-## 9. Decisions to challenge with Grill Me
+### Musical timing
 
-Settled: product name; required framework/UI library; six source skins; 180
-BPM/C minor; only 90/180 ready rhythmic samples; conversion of all other tempos;
-major/mixed-key review. Do not reopen those without new evidence or a user
-change.
+Use synthetic impulses for 10 minutes. Render at 44.1/48 kHz. Include loop and
+seek operations. Keep onset error <=1 output sample relative to the mathematical
+schedule. Do not let timing error increase with elapsed time.
 
-| Decision                                       | Proposed default                                                                                                                        | Owner and next verification                                                                                                 |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Non-tonal and one-shot policy                  | Key-neutral percussion/noise; no fake key detection; one-shots get placement context without invented measured BPM                      | Product owner; audition representative FX/drums and approve exceptions before M0 closes                                     |
-| C-minor compatibility and detection confidence | Natural-minor analysis reference; harmonic/melodic phrases need review; never silently force a mode                                     | Product owner and audio implementer; label representative phrases and compare analyzer results in M1                        |
-| Release scope and browser/hardware floor       | Desktop, eight initial tracks, up to 32; current/previous stable desktop browsers                                                       | Product owner; confirm workflow and use M1 measurements to set supported limits                                             |
-| Catalog distribution                           | User imports local assets; public builds use only independently cleared content                                                         | Product owner; inspect applicable terms or obtain permission before distributing any original library files                 |
-| DSP and detector selection                     | Prototype the privately documented DSP candidate; select detector after corpus evaluation                                               | Audio implementer; demonstrate Worker integration, latency compensation, quality, performance and dependency license review |
-| Corpus success criteria                        | No silent false-ready result in labeled fixtures; set usable-coverage and manual-review limits by class before evaluating the prototype | Product owner and audio implementer; agree the corpus and numerical thresholds in M0, then measure in M1                    |
+### Transformation
 
-Invoke [.github/skills/grill-me/SKILL.md](../.github/skills/grill-me/SKILL.md)
-for one decision at a time. Record answers here and update PRODUCT.md only for
-newly confirmed product requirements. Do not start implementation from the
-interview unless the user requests it.
+Use signals with known BPM and key. After latency compensation, keep the length
+difference from the target to 1 frame or less. Keep the sustained test-tone
+pitch difference from its target to 5 cents or less. Keep stereo alignment
+through joint channel processing.
 
-## 10. Current limitations and next action
+### Musical quality
 
-Only research and planning have been completed. There is no application,
-measured DSP benchmark, browser test suite, listening review or approved
-distribution permission for the sample library. The original application has not
-been launched; the classic-workflow assessment uses the product page and
-installed help.
+Review bass, kicks, breaks, pads, vocals, FX and split stereo locally. Use
+representative conversion ratios and ratios at their limits. Record audio
+artifacts that you can hear. Reject unusable derivatives.
 
-The largest remaining uncertainty is how well imported real recordings can be
-classified and transformed without audible damage while playback and the
-material UI run together. M1 tests feasibility through a labeled corpus,
-repeatable timing tests, listening review and a measured production-build
-prototype with representative material panels. M5 repeats the combined workload
-against the completed application before claiming release performance.
+### Editing load
 
-The next implementation step, once requested, is M0 followed by M1. The next
-planning step is the non-tonal/one-shot decision in the imported Grill Me skill.
+Use 32 tracks, 4,096 clips, 256 bars and the full catalog metadata. Keep
+selection and drag response p95 <50 ms. This percentile means that 95% of
+measured responses are faster than this limit. Do not let an import cause a
+main-thread task >50 ms.
+
+### Playback during other work
+
+Play 32 voices at the same time, plus a preview. Scroll waveforms and operate
+one conversion at the same time. Do a 10-minute test with each skin, including
+the most animated reference. Accept no detected missed onsets or dropouts that
+you can hear.
+
+### Import precision
+
+Use a labeled corpus with 90/180 ambiguity, off-grid recordings, minor, major,
+mixed-key and unpitched audio. Report errors and review rates before you set
+confidence thresholds for `ready` status.
+
+### Recovery and portability
+
+Stop the app without its usual shutdown procedure during each import and save
+phase. Then reload the app. Keep the last valid project. Do not give a partial
+asset `ready` status. Clear browser storage before you open a portable archive
+again. Make sure that the archive restores the project.
+
+### Accessibility
+
+Use automated tests and manual keyboard, focus and zoom tests. Do tests of all
+six skins with Full/Reduced/Static effects. Do a test of forced-colors mode
+where the browser supports it.
+
+Measure performance on a documented computer with integrated graphics and 8 GB
+RAM as a candidate minimum system. Record CPU/GPU, RAM, OS, browser, output
+device, sample rate, build, workload and method. Headless timing tests and
+screenshots do not prove listening quality or GPU performance on a real device.
+Select limits from the results.
+
+## 9. Open decisions
+
+These requirements have user approval:
+
+- The product name.
+- The typed language and major-7 compiler.
+- The framework and UI library.
+- The six reference skins.
+- 180 BPM and C minor.
+- Only 90/180 BPM for rhythmic samples with `ready` status.
+- Conversion of all other tempos.
+- Review of major and mixed-key imports.
+
+Do not reopen these decisions without new evidence or a user change.
+
+| Decision                                      | Recommendation                                                                                                       | Responsible person and next test                                                                                          |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Non-tonal audio and one-shots                 | Key-neutral percussion and noise. No invented key or BPM. One-shots get a placement context.                         | Product owner: audition representative FX and drums. Give approval for these different treatments before M0 ends.         |
+| C-minor compatibility and detector confidence | Natural-minor analysis reference. Review harmonic and melodic phrases. Do not silently force a mode.                 | Product owner and audio developer: identify representative phrases. Compare detector results in M1.                       |
+| Release scope, browsers and hardware          | Desktop use, eight initial tracks and up to 32 tracks. Current and previous stable desktop browsers.                 | Product owner: give approval for the workflow. Use M1 measurements to set supported limits.                               |
+| Catalog distribution                          | Local user imports. Public builds contain only material with separate distribution permission.                       | Product owner: examine the applicable terms or get permission before distribution of source library files.                |
+| DSP and detector selection                    | Do a test of the DSP candidate in private research. Select a detector after the corpus test.                         | Audio developer: do tests of Worker operation, latency compensation, quality and performance. Review dependency licenses. |
+| Corpus acceptance criteria                    | No silent incorrect `ready` result in labeled fixtures. Set usable-coverage and manual-review limits for each class. | Product owner and audio developer: give approval for the corpus and numerical limits in M0. Measure results in M1.        |
+
+Use [.github/skills/grill-me/SKILL.md](../.github/skills/grill-me/SKILL.md) for
+one decision at a time. Record the answers here. Update PRODUCT.md only with
+product requirements that have user approval. Do not start application
+development from the interview unless the user requests it.
+
+## 10. Current limits and next step
+
+The project contains research, plans and development tools. There is no
+application, measured DSP benchmark, browser test suite or listening review.
+This plan has no evidence of permission to distribute the sample library. The
+local research did not include operation of OG. The local workflow evidence
+comes from the product page and installed help.
+
+The primary uncertainty is audio classification and conversion during playback
+and material UI operation. Audio quality must not decrease. M1 uses a labeled
+corpus, repeatable timing tests and a listening review for its feasibility
+decision. It also measures a production-build prototype with representative
+material panels. M5 applies the combined workload again to the complete
+application before a release performance claim.
+
+When the user requests development, start with M0 and then M1. The next plan
+decision concerns non-tonal audio and one-shots. Use the decision-interview
+skill for that decision.
