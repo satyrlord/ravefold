@@ -1,0 +1,6 @@
+# Private machine configuration. Never expose these values in browser bundles.
+.env.local
+.env.*.local
+
+# Private source research and attribution.
+/docs/research.md
