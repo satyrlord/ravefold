@@ -1,6 +1,0 @@
-interface:
-  display_name: "Plan questions"
-  short_description: "Examine one design decision at a time"
-  default_prompt: "Use $grill-me to examine my plan one decision at a time."
-policy:
-  allow_implicit_invocation: true

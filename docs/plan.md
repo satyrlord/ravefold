@@ -20,24 +20,29 @@ Keep the simple composition process from OG. Add undo, sound search, background
 import, clear waveforms and portable projects. A portable project contains the
 data and audio necessary to open it on a different computer.
 
+The first-release task has user approval: arrange and export tracks. Users
+import samples, edit clips and adjust a basic mix. They can save and reopen
+projects, then export stereo WAV. Recording, sound synthesis and automation are
+outside the first release.
+
+The first release supports editing on desktop and laptop computers with a
+keyboard and pointer. Full tablet and phone editing are outside this release.
 The intended users want to make rave music quickly. They can include persons who
-used OG. Start with desktop and laptop browsers, a keyboard and a mouse. The
-first result is an arrangement that the user can save, open again and export.
-Use samples from the local library for this result.
+used OG. The other feature details below are recommendations.
 
 OG is the reference for arrangement, sample import, audio recording and sound
 generation. [Private research](research/local-research.md#original-product)
 contains source descriptions and library measurements.
 
-| First release                                                                                                      | Subsequent work, after all first-release tests give correct results          |
-| ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| Library search, category filters, favorites, preview, waveforms and preparation status                             | Microphone recording and resampling                                          |
-| Eight initial tracks, with controls to add, remove and change their sequence. Recommended tested limit: 32 tracks. | A new sound synthesizer based on OG                                          |
-| Clip insertion by drag-and-drop or keyboard, movement, duplication, deletion, trim, repeat, undo and redo          | Automation lanes, more effects and performance scenes                        |
-| Play, pause, stop, seek, loop region, musical snap and timeline zoom                                               | MIDI input and external synchronization                                      |
-| Track gain, pan, mute, solo and meters. Master gain and clipping indication.                                       | Cloud accounts, shared editing and public sample exchange                    |
-| Background import preparation, review and retry                                                                    | OG project conversion, after separate format research                        |
-| Autosave, portable project archive, stereo WAV export and all six skins                                            | Full mobile editing and conversion of individual notes between musical modes |
+| First release                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------------ |
+| Library search, category filters, favorites, preview, waveforms and preparation status                             |
+| Eight initial tracks, with controls to add, remove and change their sequence. Recommended tested limit: 32 tracks. |
+| Clip insertion by drag-and-drop or keyboard, movement, duplication, deletion, trim, repeat, undo and redo          |
+| Play, pause, stop, seek, loop region, musical snap and timeline zoom                                               |
+| Track gain, pan, mute, solo and meters. Master gain and clipping indication.                                       |
+| Background import preparation, review and retry                                                                    |
+| Autosave, portable project archive, stereo WAV export and all six skins                                            |
 
 Do not add variable project tempo, a key selector, plug-in hosting or a full
 piano-roll editor to this release. The fixed tempo and key are product features.
@@ -47,6 +52,8 @@ piano-roll editor to this release. The fixed tempo and key are product features.
 ### Decisions with user approval
 
 - The arrangement operates at **180 BPM in C minor**.
+- Accept natural, harmonic and melodic minor as compatible forms of C minor.
+  Keep uncertain key results in review.
 - Rhythmic samples with **`ready` status** have a tempo of **90 or 180 BPM
   only**.
 - Convert **all other source tempos** before use. This includes 45, 135 and 270
@@ -54,6 +61,10 @@ piano-roll editor to this release. The fixed tempo and key are product features.
   decision replaces that rule.
 - Complete the necessary time stretching and pitch shifting before you set
   `ready` status. Do this work in the background.
+- Accept unpitched one-shots without tempo or key conversion. Keep their source
+  sound and duration. Place their start on the arrangement grid.
+- Treat unpitched drum and noise loops as key-neutral. Prepare them at 90 or 180
+  BPM without pitch shifting. Apply the tonal rules to tuned percussion.
 - Keep major and mixed-key imports in review. Use only compatible sections in
   the first release. A pitch shift of the full signal does not change its
   musical mode.
@@ -95,19 +106,19 @@ measurements, confidence scores, manual corrections and prepared values
 independently.
 
 For tonal audio in a minor key, transpose to C with the nearest signed semitone
-offset. Keep an explicit octave adjustment for the user. Use C natural minor as
-the initial analysis reference. Mark harmonic-minor and melodic-minor phrases
-for musical review. Keep the source audio. Do not set C-minor metadata only
-because conversion completed.
+offset. Keep an explicit octave adjustment for the user. Accept natural,
+harmonic and melodic minor after transposition to C. Keep uncertain key results
+in review. Keep the source audio. Do not set C-minor metadata only because
+conversion completed.
 
-This plan recommends different treatment for non-tonal audio: drums, noise and
-unpitched effects. These sounds are key-neutral. A pitch shift is not necessary.
-A rhythmic drum loop must have a valid tempo of 90 or 180 BPM. A one-shot is a
-sound for one playback, not a loop. A free one-shot has no measured BPM.
+A one-shot is a sound for one playback, not a loop. Unpitched one-shots have
+user approval for use without musical conversion. Do not invent a detected BPM
+or musical key for them. File validation is still necessary before `ready`
+status. Detector uncertainty is a different decision.
 
-Give a free one-shot a 180 BPM placement context. Keep its transient and
-duration. Pitch review is necessary for tuned percussion. Section 9 contains
-this open decision about sound classes.
+Unpitched drum and noise loops are key-neutral. Prepare them at 90 or 180 BPM.
+Do not apply pitch shifting to these loops. Tuned percussion uses the tonal
+rules.
 
 ## 3. Workspace and interaction
 
@@ -154,9 +165,9 @@ results, but not each meter update.
 
 At 1280 x 720, close the inspector panel before you decrease the arranger width.
 At smaller widths, give the library, arranger and mixer different views. Phone
-layouts can show the library and previews. Full touch editing is not part of the
-first release. Do tests of 200% zoom, keyboard operation, contrast and focus in
-each skin.
+layouts can show the library and previews, but this is not a first-release
+requirement. Full tablet and phone editing are outside the first release. Do
+tests of 200% zoom, keyboard operation, contrast and focus in each skin.
 
 ### Six skins, one set of controls
 
@@ -472,6 +483,9 @@ Acceptance evidence:
 
 - Correct results from the 45/90/135/180/270 BPM tests.
 - Minor-key transposition and review holds for major and mixed-key audio.
+- Correct acceptance of natural, harmonic and melodic C-minor phrases.
+- Unchanged sound and duration for unpitched one-shots. Tempo conversion without
+  pitch shifting for unpitched drum and noise loops.
 - Correct results for corrupt input, stereo, retry and quota errors.
 
 ### M4: Save and export
@@ -516,17 +530,37 @@ Before M1, select a labeled corpus with these groups:
 ## 8. Verification and release targets
 
 Use the recommended unit-test runner for musical calculations, command history,
-state transitions, project schemas and migrations. Use headless browser
-automation on the production build for integration and visual tests. Keep
-private OG material out of public CI. Use generated signals and samples with
-distribution permission in public tests. Keep a different local test suite for
-the supplied library.
+state transitions, project schemas and migrations. Keep non-browser checks in
+the quick gate. Keep private OG material out of public CI. Use generated signals
+and samples with distribution permission in public tests. Keep a different local
+test suite for the supplied library.
 
-This plan recommends current and previous stable releases of the desktop
-browsers in the private specification. Record the browser version numbers in
-private test evidence. The first prototype browser is not the full release
-matrix. An automated browser engine does not replace a test in each actual
-release browser. Mark unavailable environments as unverified.
+Official support is limited to Chromium-based desktop browsers. Other browsers
+must operate without browser-related application errors. Do not block startup
+only because the browser uses a different engine. Use capability detection
+before optional API calls. Give a controlled fallback or a clear availability
+message when a capability is missing.
+
+Select the supported version range from prototype evidence. Record tested
+browser versions in private test evidence. Full support for other browser
+engines is outside this release. This limit must be clear in product
+documentation. Mark behavior without test evidence as unverified.
+
+Run browser tests only through `npm run quality:full`, and only for UI changes.
+UI changes affect appearance, layout, interaction, accessibility or UI rendering
+dependencies. Do not start browser tests for documentation, tool-only or other
+non-UI changes. Use quick checks and relevant non-browser tests for those
+changes.
+
+Add `quality:full` with the first real UI browser suite. The command does not
+exist yet. It must run the quick gate, build the application, and run headless
+browser tests on that build. Include integration, visual and capability-fallback
+tests. Any limited tests in other browser engines also belong in this gate. They
+do not expand official support.
+
+Do not expose a separate browser-test path that bypasses the full gate. Do not
+report full verification from an empty gate or a quick-gate alias. Apply this
+test boundary to all milestones, including prototype and release checks.
 
 Use HTTPS static hosting with Worker and WASM assets from the app origin. Do a
 test of the built application with correct MIME types, asset paths and CSP. Do
@@ -542,6 +576,7 @@ Do tests for these conditions:
 - Interrupted imports.
 - Missing assets.
 - Suspended audio.
+- Missing browser capabilities without uncaught errors or a failed application.
 
 These numbers are recommended acceptance targets, **not measured results**.
 
@@ -611,21 +646,34 @@ These requirements have user approval:
 - The typed language and major-7 compiler.
 - The framework and UI library.
 - The six reference skins.
+- Full first-release editing on desktop and laptop computers with a keyboard and
+  pointer. Full tablet and phone editing are outside this release.
+- Official support for Chromium-based desktop browsers only. Other browsers must
+  operate without browser-related application errors.
+- Browser tests only through the full quality gate, and only for UI changes.
+- The first-release task: import samples, edit an arrangement, adjust a basic
+  mix, save and reopen projects, and export stereo WAV.
+- Recording, sound synthesis and automation after the first release.
 - 180 BPM and C minor.
 - Only 90/180 BPM for rhythmic samples with `ready` status.
 - Conversion of all other tempos.
+- Unpitched one-shots without tempo or key conversion. Their sound and duration
+  stay unchanged, and their start uses the arrangement grid.
+- Key-neutral unpitched drum and noise loops at 90 or 180 BPM. Tuned percussion
+  uses the tonal rules.
 - Review of major and mixed-key imports.
+- Natural, harmonic and melodic minor as compatible forms of C minor. Uncertain
+  key results stay in review.
 
 Do not reopen these decisions without new evidence or a user change.
 
-| Decision                                      | Recommendation                                                                                                       | Responsible person and next test                                                                                          |
-| --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Non-tonal audio and one-shots                 | Key-neutral percussion and noise. No invented key or BPM. One-shots get a placement context.                         | Product owner: audition representative FX and drums. Give approval for these different treatments before M0 ends.         |
-| C-minor compatibility and detector confidence | Natural-minor analysis reference. Review harmonic and melodic phrases. Do not silently force a mode.                 | Product owner and audio developer: identify representative phrases. Compare detector results in M1.                       |
-| Release scope, browsers and hardware          | Desktop use, eight initial tracks and up to 32 tracks. Current and previous stable desktop browsers.                 | Product owner: give approval for the workflow. Use M1 measurements to set supported limits.                               |
-| Catalog distribution                          | Local user imports. Public builds contain only material with separate distribution permission.                       | Product owner: examine the applicable terms or get permission before distribution of source library files.                |
-| DSP and detector selection                    | Do a test of the DSP candidate in private research. Select a detector after the corpus test.                         | Audio developer: do tests of Worker operation, latency compensation, quality and performance. Review dependency licenses. |
-| Corpus acceptance criteria                    | No silent incorrect `ready` result in labeled fixtures. Set usable-coverage and manual-review limits for each class. | Product owner and audio developer: give approval for the corpus and numerical limits in M0. Measure results in M1.        |
+| Decision                                | Recommendation                                                                                                       | Responsible person and next test                                                                                          |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Key-detector confidence                 | Review uncertain key results. Select confidence thresholds from corpus measurements.                                 | Product owner and audio developer: identify representative phrases. Compare detector results in M1.                       |
+| Browser versions, capacity and hardware | Eight initial tracks and up to 32 tracks. Use measurements to select supported versions and hardware limits.         | Product owner and developer: use M1 measurements to set supported limits.                                                 |
+| Catalog distribution                    | Local user imports. Public builds contain only material with separate distribution permission.                       | Product owner: examine the applicable terms or get permission before distribution of source library files.                |
+| DSP and detector selection              | Do a test of the DSP candidate in private research. Select a detector after the corpus test.                         | Audio developer: do tests of Worker operation, latency compensation, quality and performance. Review dependency licenses. |
+| Corpus acceptance criteria              | No silent incorrect `ready` result in labeled fixtures. Set usable-coverage and manual-review limits for each class. | Product owner and audio developer: give approval for the corpus and numerical limits in M0. Measure results in M1.        |
 
 Use [.github/skills/grill-me/SKILL.md](../.github/skills/grill-me/SKILL.md) for
 one decision at a time. Record the answers here. Update PRODUCT.md only with
@@ -648,5 +696,5 @@ material panels. M5 applies the combined workload again to the complete
 application before a release performance claim.
 
 When the user requests development, start with M0 and then M1. The next plan
-decision concerns non-tonal audio and one-shots. Use the decision-interview
-skill for that decision.
+decision concerns a first-release sample pack. Use the decision-interview skill
+for that decision.
