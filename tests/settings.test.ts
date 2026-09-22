@@ -13,12 +13,12 @@ import { settingsFixture } from "./fixtures.ts";
 
 test("appearance defaults honor reduced motion before folder access", () => {
   assert.deepEqual(defaultAppearance(), {
-    skin: "reference-2",
+    skin: "reference-6",
     mode: "system",
     effects: "full",
   });
   assert.deepEqual(defaultAppearance(true), {
-    skin: "reference-2",
+    skin: "reference-6",
     mode: "system",
     effects: "static",
   });

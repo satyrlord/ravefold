@@ -571,7 +571,7 @@ test("corrupt and oversized settings stay unchanged with a recoverable status", 
     await settleWrites(controller);
     assert.equal(file.contents, content);
     assert.match(controller.getSnapshot().settingsMessage, /invalid/u);
-    assert.equal(controller.getSnapshot().appearance.skin, "reference-2");
+    assert.equal(controller.getSnapshot().appearance.skin, "reference-6");
     controller.dispose();
   }
 });

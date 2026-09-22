@@ -101,17 +101,17 @@ to each control. The `on` and `on-text` pair identifies primary actions. Control
 text uses the `plate` background. Static panels use the `surface` and `edge`
 pair. Status text appears with success and error colors.
 
-| Skin        | Material appearance                                     |
-| ----------- | ------------------------------------------------------- |
-| Reference 1 | Transparent surfaces with colored edges                 |
-| Reference 2 | Dark frosted surfaces                                   |
-| Reference 3 | Surfaces that are not transparent, with reduced effects |
-| Reference 4 | Transparent surfaces with refraction                    |
-| Reference 5 | Dark surfaces with pink edges                           |
-| Reference 6 | Transparent surfaces with increased motion              |
+| Skin    | Saved ID      | Material appearance                                     |
+| ------- | ------------- | ------------------------------------------------------- |
+| Lumen   | `reference-1` | Transparent surfaces with colored edges                 |
+| Studio  | `reference-2` | Dark frosted surfaces                                   |
+| Slate   | `reference-3` | Surfaces that are not transparent, with reduced effects |
+| Aqua    | `reference-4` | Transparent surfaces with refraction                    |
+| Neon    | `reference-5` | Dark surfaces with pink edges                           |
+| Entropy | `reference-6` | Transparent surfaces with increased motion              |
 
-Reference 2 is the initial skin. Light, dark and system modes use the same
-control structure. Do not replace the reference definitions with new palettes.
+Entropy is the initial skin. Light, dark and system modes use the same control
+structure. Do not replace the reference definitions with new palettes.
 
 ## Typography
 
@@ -141,16 +141,17 @@ The registered primary panels use one material renderer. Static mode does not
 mount that renderer. An unavailable renderer uses the selected theme with CSS
 surfaces. The registry sets the renderer limit to eight surfaces.
 
-Static panels use a thin inset edge and a skin-dependent shadow. Reference 3
-keeps only the edge. Native modal dialogs use themed backgrounds that are not
+Static panels use a thin inset edge and a skin-dependent shadow. Slate keeps
+only the edge. Native modal dialogs use themed backgrounds that are not
 transparent, a shadow and a blurred backdrop. A second material renderer is not
 necessary.
 
 ## Shapes
 
 Primary panels use the registry radius. Controls use smaller corners from the
-tokens above. Status dots are circular. The outlined brand symbol and control
-icons use the current text color.
+tokens above. Status dots are circular. The
+[mask logo](src/assets/ravefold-mask.svg) uses fixed blue-green colors in all
+skins. The wordmark and control icons use the current text color.
 
 ## Components
 

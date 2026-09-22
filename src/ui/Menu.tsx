@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import maskLogoUrl from "../assets/ravefold-mask.svg?url";
 import type { EntryResult } from "../domain/entry.ts";
 import type { Appearance, Effects, ThemeMode } from "../domain/settings.ts";
 import type { FolderKind } from "../storage/handles.ts";
@@ -58,19 +59,7 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
       <div className="app-shell">
         <header className="masthead">
           <div className="wordmark">
-            <svg
-              className="brand-symbol"
-              viewBox="0 0 40 40"
-              fill="none"
-              aria-hidden="true"
-            >
-              <path
-                d="M6 32V8h12l-5 12h14L22 32M18 8h16L22 32"
-                stroke="currentColor"
-                strokeWidth="2.3"
-                strokeLinejoin="round"
-              />
-            </svg>
+            <img className="brand-symbol" src={maskLogoUrl} alt="" />
             <span>RaveFold</span>
           </div>
           <div className="music-settings" aria-label="Project timing">
@@ -90,7 +79,6 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
               aria-labelledby="session-heading"
             >
               <h1 id="session-heading">Make your next track.</h1>
-              <p className="intro">Your samples. Your arrangement.</p>
               <div className="project-actions">
                 <Button
                   className="project-action primary"
@@ -286,7 +274,6 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
             aria-labelledby="appearance-heading"
           >
             <h2 id="appearance-heading">Appearance</h2>
-            <p className="small">Six skins. One workspace.</p>
             <div className="skin-grid" role="radiogroup" aria-label="Skin">
               {SKINS.map((skin, index) => (
                 <button
@@ -375,7 +362,7 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
               className={`state-dot ${allReady ? "ready" : ""}`}
               aria-hidden="true"
             />
-            {allReady ? "Ready for your session" : "Waiting for your folders"}
+            {allReady ? "Folders ready" : "Folder access needed"}
           </span>
           <span>Desktop · Chromium browsers</span>
         </footer>

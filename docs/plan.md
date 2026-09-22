@@ -248,14 +248,16 @@ not export them as preset objects. Make a typed registry from the fixed defaults
 and each preset patch. Keep the necessary license notices with copied material.
 The neutral descriptions below do not replace the preset definitions.
 
-| Skin        | Appearance                                             |
-| ----------- | ------------------------------------------------------ |
-| Reference 1 | Transparent surfaces and edges with colors that change |
-| Reference 2 | Dark frosted surfaces. Recommended initial selection.  |
-| Reference 3 | Surfaces that are not transparent, with fewer effects  |
-| Reference 4 | Transparent surfaces with refraction                   |
-| Reference 5 | Pink edges and dark colors                             |
-| Reference 6 | Large movements and ambient effects                    |
+| Skin    | Appearance                                             |
+| ------- | ------------------------------------------------------ |
+| Lumen   | Transparent surfaces and edges with colors that change |
+| Studio  | Dark frosted surfaces                                  |
+| Slate   | Surfaces that are not transparent, with fewer effects  |
+| Aqua    | Transparent surfaces with refraction                   |
+| Neon    | Pink edges and dark colors                             |
+| Entropy | Large movements and ambient effects                    |
+
+Entropy is the initial skin when no saved preference is available.
 
 Keep the layout, sound-role colors, focus indication and commands the same in
 all skins. Use text backgrounds that are not transparent, or give sufficient

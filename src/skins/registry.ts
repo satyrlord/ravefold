@@ -74,44 +74,37 @@ export const REFERENCE_DEFAULTS: Readonly<ReferenceSettings> = Object.freeze({
 export const SKINS = Object.freeze([
   {
     id: "reference-1",
-    label: "Reference 1",
-    description: "Clear glass",
+    label: "Lumen",
     swatch: "#87e4d4",
   },
   {
     id: "reference-2",
-    label: "Reference 2",
-    description: "Frosted glass",
+    label: "Studio",
     swatch: "#446a70",
   },
   {
     id: "reference-3",
-    label: "Reference 3",
-    description: "Solid panels",
+    label: "Slate",
     swatch: "#66798d",
   },
   {
     id: "reference-4",
-    label: "Reference 4",
-    description: "Water lens",
+    label: "Aqua",
     swatch: "#83cbdc",
   },
   {
     id: "reference-5",
-    label: "Reference 5",
-    description: "Colored edges",
+    label: "Neon",
     swatch: "#ff2d95",
   },
   {
     id: "reference-6",
-    label: "Reference 6",
-    description: "Moving glass",
+    label: "Entropy",
     swatch: "#c88ee1",
   },
 ] as const satisfies readonly {
   id: SkinId;
   label: string;
-  description: string;
   swatch: string;
 }[]);
 

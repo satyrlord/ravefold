@@ -102,7 +102,7 @@ test("the built native extension supports folder setup, reload, entry and revoca
       dialog.getByText("Settings folder is ready.", { exact: true }),
     ).toBeVisible();
     await dialog.getByRole("button", { name: "Done", exact: true }).click();
-    await page.getByRole("radio", { name: "Reference 5", exact: true }).click();
+    await page.getByRole("radio", { name: "Neon", exact: true }).click();
     await expect(page.locator(".appearance-status")).toHaveText(
       "Appearance saved in your settings folder.",
     );

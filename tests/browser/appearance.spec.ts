@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { SKINS } from "../../src/skins/registry.ts";
 
 const reviewFolder = ".impeccable/review";
 
@@ -8,8 +9,8 @@ function watchErrors(page: Page): string[] {
   return errors;
 }
 
-for (let skin = 1; skin <= 6; skin += 1) {
-  test(`reference ${skin} has complete material, static and theme states`, async ({
+for (const skin of SKINS) {
+  test(`${skin.label} has complete material, static and theme states`, async ({
     page,
   }) => {
     test.setTimeout(90_000);
@@ -21,12 +22,12 @@ for (let skin = 1; skin <= 6; skin += 1) {
     await page.goto("/");
     const root = page.locator(".material-root");
     const selection = page.getByRole("radio", {
-      name: `Reference ${skin}`,
+      name: skin.label,
       exact: true,
     });
     await selection.click();
     await expect(selection).toHaveAttribute("aria-checked", "true");
-    await expect(root).toHaveAttribute("data-skin", `reference-${skin}`);
+    await expect(root).toHaveAttribute("data-skin", skin.id);
 
     for (const mode of ["dark", "light", "system"] as const) {
       await page.getByLabel("Color mode", { exact: true }).selectOption(mode);
@@ -67,7 +68,7 @@ for (let skin = 1; skin <= 6; skin += 1) {
           (mode === "light" && effects === "static")
         ) {
           await page.screenshot({
-            path: `${reviewFolder}/reference-${skin}-${mode}-${effects}.png`,
+            path: `${reviewFolder}/${skin.id}-${mode}-${effects}.png`,
             fullPage: true,
           });
         }
@@ -81,6 +82,13 @@ test("reduced motion starts without a material canvas", async ({ page }) => {
   const errors = watchErrors(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
+  await expect(
+    page.getByRole("radio", { name: "Entropy", exact: true }),
+  ).toHaveAttribute("aria-checked", "true");
+  await expect(page.locator(".material-root")).toHaveAttribute(
+    "data-skin",
+    "reference-6",
+  );
   await expect(page.locator(".material-root")).toHaveAttribute(
     "data-effects",
     "static",
@@ -116,13 +124,11 @@ test("unavailable graphics retain the full usable menu", async ({ page }) => {
     "unavailable",
   );
   await expect(page.locator("canvas")).toHaveCount(0);
-  for (let skin = 1; skin <= 6; skin += 1) {
-    await page
-      .getByRole("radio", { name: `Reference ${skin}`, exact: true })
-      .click();
+  for (const skin of SKINS) {
+    await page.getByRole("radio", { name: skin.label, exact: true }).click();
     await expect(page.locator(".material-root")).toHaveAttribute(
       "data-skin",
-      `reference-${skin}`,
+      skin.id,
     );
     await expect(
       page.getByRole("button", { name: "Folder settings", exact: true }),
@@ -197,10 +203,8 @@ test("all skins keep entry and folder controls reachable at the 200 percent layo
   await page.setViewportSize({ width: 640, height: 360 });
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  for (let skin = 1; skin <= 6; skin += 1) {
-    await page
-      .getByRole("radio", { name: `Reference ${skin}`, exact: true })
-      .click();
+  for (const skin of SKINS) {
+    await page.getByRole("radio", { name: skin.label, exact: true }).click();
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -225,7 +229,7 @@ test("all skins keep entry and folder controls reachable at the 200 percent layo
       ).toBe(true);
     }
     await page.screenshot({
-      path: `${reviewFolder}/reference-${skin}-compact-dialog.png`,
+      path: `${reviewFolder}/${skin.id}-compact-dialog.png`,
       fullPage: true,
     });
     await page.keyboard.press("Escape");

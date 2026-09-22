@@ -19,6 +19,20 @@ const expected = [
   "79c084ac5d891731135f3940b4d444248af4d9889b395d07f3d24f4e1bce289f",
 ];
 
+test("skin names match the six reference presets", () => {
+  assert.deepEqual(
+    SKINS.map(({ id, label }) => ({ id, label })),
+    [
+      { id: "reference-1", label: "Lumen" },
+      { id: "reference-2", label: "Studio" },
+      { id: "reference-3", label: "Slate" },
+      { id: "reference-4", label: "Aqua" },
+      { id: "reference-5", label: "Neon" },
+      { id: "reference-6", label: "Entropy" },
+    ],
+  );
+});
+
 test("all six definitions match the fixed reference settings", () => {
   assert.equal(SKINS.length, expected.length);
   SKINS.forEach((skin, index) => {

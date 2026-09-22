@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { SKINS } from "../../src/skins/registry.ts";
 
 test("an unsupported browser opens the static menu without application errors", async ({
   page,
@@ -17,10 +18,8 @@ test("an unsupported browser opens the static menu without application errors", 
   await expect(page.getByLabel("Effects", { exact: true })).toHaveValue(
     "static",
   );
-  for (let index = 1; index <= 6; index++) {
-    await page
-      .getByRole("radio", { name: `Reference ${index}`, exact: true })
-      .click();
+  for (const skin of SKINS) {
+    await page.getByRole("radio", { name: skin.label, exact: true }).click();
   }
   await page
     .getByRole("button", { name: "Folder settings", exact: true })
@@ -42,7 +41,7 @@ test("an unsupported browser keeps the full-effects menu usable", async ({
   await page.goto("/");
   const root = page.locator(".material-root");
   await expect(root).toHaveAttribute("data-effects", "full");
-  await page.getByRole("radio", { name: "Reference 6", exact: true }).click();
+  await page.getByRole("radio", { name: "Entropy", exact: true }).click();
   await expect(root).toHaveAttribute("data-skin", "reference-6");
   await page
     .getByRole("button", { name: "Folder settings", exact: true })

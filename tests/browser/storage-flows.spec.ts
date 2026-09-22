@@ -259,7 +259,7 @@ test("appearance uses explicit session choices and saves merged settings", async
   expect((await snapshotFS(page)).writes).toEqual([]);
   await folders(page, false, true);
   await expect(
-    page.getByRole("radio", { name: "Reference 5", exact: true }),
+    page.getByRole("radio", { name: "Neon", exact: true }),
   ).toHaveAttribute("aria-checked", "true");
   await expect(page.getByLabel("Color mode", { exact: true })).toHaveValue(
     "light",
@@ -311,7 +311,7 @@ test("corrupt settings remain unchanged while appearance controls stay usable", 
   const errors = await start(page, { settings: original });
   await folders(page, false, true);
   await expect(page.getByText(/Saved settings are invalid/)).toBeVisible();
-  await page.getByRole("radio", { name: "Reference 4", exact: true }).click();
+  await page.getByRole("radio", { name: "Aqua", exact: true }).click();
   await expect(page.locator(".material-root")).toHaveAttribute(
     "data-skin",
     "reference-4",

@@ -105,7 +105,7 @@ export function parseSettings(source: string): Settings {
 
 export function defaultAppearance(reducedMotion = false): Appearance {
   return {
-    skin: "reference-2",
+    skin: "reference-6",
     mode: "system",
     effects: reducedMotion ? "static" : "full",
   };

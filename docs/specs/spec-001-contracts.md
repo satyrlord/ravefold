@@ -62,7 +62,7 @@ The `ravefold-settings.json` file contains this JSON structure:
 {
   "schemaVersion": 1,
   "appearance": {
-    "skin": "reference-2",
+    "skin": "reference-6",
     "mode": "system",
     "effects": "full"
   }
@@ -73,9 +73,9 @@ Skin values range from `reference-1` through `reference-6`. The `mode` field
 accepts `system`, `light` or `dark`. The `effects` field accepts `full`,
 `reduced` or `static`. Unknown fields are invalid. The read limit is 16 KiB.
 
-The default uses Reference 2 and system mode. Effects default to Full, or Static
-when the system requests reduced motion. User selections in the current session
-replace saved values for the changed fields only.
+The default uses Entropy (`reference-6`) and system mode. Effects default to
+Full, or Static when the system requests reduced motion. User selections in the
+current session replace saved values for the changed fields only.
 
 ## Entry result
 

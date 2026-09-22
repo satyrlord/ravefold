@@ -171,7 +171,7 @@ test("native folder handles survive reload and database removal leaves fixture f
   }, generatedWav());
 
   await selectFolders(page);
-  await page.getByRole("radio", { name: "Reference 4", exact: true }).click();
+  await page.getByRole("radio", { name: "Aqua", exact: true }).click();
   await page.getByLabel("Color mode", { exact: true }).selectOption("light");
   await page.getByLabel("Effects", { exact: true }).selectOption("static");
   await expect(page.locator(".appearance-status")).toHaveText(

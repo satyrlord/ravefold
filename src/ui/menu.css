@@ -65,6 +65,7 @@ a {
   letter-spacing: -0.03em;
 }
 .brand-symbol {
+  display: block;
   width: 39px;
   height: 39px;
 }
@@ -120,11 +121,6 @@ h2 {
 h3 {
   font-size: 16px;
   font-weight: 500;
-}
-.intro {
-  color: var(--muted);
-  margin-top: 12px;
-  font-size: 15px;
 }
 .project-actions {
   display: grid;

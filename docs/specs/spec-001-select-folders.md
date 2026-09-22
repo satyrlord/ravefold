@@ -157,7 +157,7 @@ supplying it for the first time.
 
 These defaults and controls are explicit implementation proposals:
 
-- Start with Reference 2 when no saved preference is available.
+- Start with Entropy when no saved preference is available.
 - Give light, dark and system theme modes in the six-skin system.
 - Give Full, Reduced and Static effects for each skin.
 - Start in Static if the system requests reduced motion and no saved explicit
