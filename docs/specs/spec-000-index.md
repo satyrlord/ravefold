@@ -9,9 +9,10 @@ Status: Draft specifications. Application implementation has not started.
 targets. Each specification below owns one user outcome and its acceptance
 checks. Proposed behavior is not a new product approval.
 
-The authorized spec-001 interview is complete. Do not start an interview for
-another specification without express user approval. An answer for spec-001 does
-not approve later specifications. This split does not authorize implementation.
+The spec-001 menu scope expansion has user approval. Its interview is complete.
+Do not start an interview for another specification without express user
+approval. An answer for spec-001 does not approve later specifications. This
+split does not authorize implementation.
 
 ## Slice order
 
@@ -19,24 +20,26 @@ Each slice includes the interface, logic and storage necessary for its outcome.
 Dependencies identify earlier outcomes, not separate technical layers. Test each
 slice through its user flow as well as its pure logic.
 
-| Specification                           | User outcome                                           | Depends on                    | Interview      |
-| --------------------------------------- | ------------------------------------------------------ | ----------------------------- | -------------- |
-| [001](spec-001-select-folders.md)       | Select folders and enter the library                   | M0 folder and format contract | Complete       |
-| [002](spec-002-find-a-sample.md)        | Find, tag and audition a source sample                 | 001                           | Not authorized |
-| [003](spec-003-use-compatible-audio.md) | Make compatible audio ready for arrangement            | 002, M1 analysis evidence     | Not authorized |
-| [004](spec-004-prepare-a-sample.md)     | Prepare a sample at the supported tempo and key        | 003, M1 conversion evidence   | Not authorized |
-| [005](spec-005-review-a-sample.md)      | Resolve an uncertain sample or select a usable section | 003, 004                      | Not authorized |
-| [006](spec-006-arrange-and-play.md)     | Place ready clips and play a short arrangement         | 003, M1 playback evidence     | Not authorized |
-| [007](spec-007-edit-sections.md)        | Move, copy, repeat and remove song sections            | 006                           | Not authorized |
-| [008](spec-008-mix-tracks.md)           | Adjust and hear a basic mix                            | 006                           | Not authorized |
-| [009](spec-009-save-and-reopen.md)      | Save a project and reopen available clips              | 006                           | Not authorized |
-| [010](spec-010-recover-work.md)         | Recover unsaved arrangement work                       | 009                           | Not authorized |
-| [011](spec-011-render-song.md)          | Render the mix to a selected folder                    | 008, 009                      | Not authorized |
-| [012](spec-012-change-appearance.md)    | Change skin without changing the music                 | 002, 006                      | Not authorized |
+| Specification                           | User outcome                                           | Depends on                         | Interview      |
+| --------------------------------------- | ------------------------------------------------------ | ---------------------------------- | -------------- |
+| [001](spec-001-select-folders.md)       | Use the full main menu and enter the tracker           | M0 entry contracts, M1 UI evidence | Complete       |
+| [002](spec-002-find-a-sample.md)        | Find, tag and audition a source sample                 | 001                                | Not authorized |
+| [003](spec-003-use-compatible-audio.md) | Make compatible audio ready for arrangement            | 002, M1 analysis evidence          | Not authorized |
+| [004](spec-004-prepare-a-sample.md)     | Prepare a sample at the supported tempo and key        | 003, M1 conversion evidence        | Not authorized |
+| [005](spec-005-review-a-sample.md)      | Resolve an uncertain sample or select a usable section | 003, 004                           | Not authorized |
+| [006](spec-006-arrange-and-play.md)     | Place ready clips and play a short arrangement         | 003, M1 playback evidence          | Not authorized |
+| [007](spec-007-edit-sections.md)        | Move, copy, repeat and remove song sections            | 006                                | Not authorized |
+| [008](spec-008-mix-tracks.md)           | Adjust and hear a basic mix                            | 006                                | Not authorized |
+| [009](spec-009-save-and-reopen.md)      | Save a project and reopen available clips              | 006                                | Not authorized |
+| [010](spec-010-recover-work.md)         | Recover unsaved arrangement work                       | 009                                | Not authorized |
+| [011](spec-011-render-song.md)          | Render the mix to a selected folder                    | 008, 009                           | Not authorized |
+| [012](spec-012-change-appearance.md)    | Keep themes stable during tracker use                  | 001, 002, 006                      | Not authorized |
 
 The order is a dependency map. It does not permit a later interview. Slices 004
 and 005 can follow the initial arrangement slice once its inputs are ready.
-Slice 012 starts from the six-skin prototype in M1.
+Slice 001 delivers the complete menu and appearance system after M0/M1 evidence.
+Slice 012 applies that system to tracker flows and tests playback continuity.
+Project-read fixtures come from M0. Slice 001 does not depend on later writers.
 
 ## Rules inherited by every slice
 
@@ -97,10 +100,12 @@ and headless tests of that build. Documentation changes use `quality:quick` and
 | Timing, transport and initial editing                  | 006                    |
 | Group editing, track changes, trim and repeat          | 007                    |
 | Basic mixer and meters                                 | 008                    |
-| Project format, missing files and relinking            | 009                    |
+| Project writing, missing-file display and relinking    | 009                    |
 | Recovery writes and interrupted sessions               | 010                    |
 | Export destination, encoding and audio tails           | 011                    |
-| Six skins, effects levels and saved appearance         | 012                    |
+| Six skins, effects levels and saved appearance         | 001                    |
+| Project-read contract and pre-entry recovery selection | 001, M0                |
+| Tracker appearance and playback continuity             | 012                    |
 | Corpus, numerical criteria and tool feasibility        | M0 and M1 in the plan  |
 | Combined load, production hosting and release evidence | M5 in the plan         |
 

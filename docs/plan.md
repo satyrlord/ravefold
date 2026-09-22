@@ -136,6 +136,11 @@ folder selection. Cancellation, denied access or an invalid folder must keep the
 menu and setup controls usable. Do not start the tracker or editor without a
 valid folder.
 
+Spec-001 owns the full main menu before tracker entry. It includes New project,
+Open project, available recovery selection, folder settings and appearance.
+Complete all six material skins and their menu states in that slice. Spec-012
+extends the same appearance system to tracker use and playback.
+
 If access to the sample folder is lost, return to the folder requirement. Keep
 the project state for recovery. Missing files within an accessible folder do not
 prevent project loading or editing. Show a red bubble at each missing sample's
@@ -191,7 +196,8 @@ before the group edit.
 Use select-all and delete to remove all clips. Do not add a separate Clear
 arrangement command. Keep tracks, mixer settings and sample files unchanged.
 Group undo restores the deleted clips. Keep New project separate from clip
-deletion. Define unsaved-project handling in the project specification.
+deletion. Spec-001 owns initial menu entry. Spec-009 defines unsaved-project
+handling when leaving or replacing an active tracker project.
 
 Give keyboard commands for transport, insertion, movement, duplication,
 deletion, undo, redo and exit from an operation. Give controls clear focus
@@ -214,6 +220,11 @@ available on pointer hover and keyboard focus. Define dismissal and focus
 behavior in the interface specification.
 
 ### Six skins, one set of controls
+
+Deliver the registry, appearance controls, settings persistence and static
+fallback with spec-001. The menu and application-owned dialogs must have the
+complete reference styling before tracker implementation. Spec-012 owns tracker
+integration and playback continuity, not the first theme implementation.
 
 Use all six presets in the
 [private technology specification](research/local-research.md#binding-technology-requirements).
@@ -577,6 +588,10 @@ Give versions to the musical, import and project contracts. Generate a private
 asset manifest. Examine stereo pairs and unusual timing values. Keep source
 files unchanged.
 
+Define the metadata-only project-read contract, recovery fixtures and settings
+schema before spec-001 acceptance. Its Open and recovery entry flows must work
+without waiting for later project writers. Use generated fixtures with no audio.
+
 The product owner and audio developer define the labeled corpus and acceptance
 criteria. Get product-owner approval before M1 acceptance tests. Include each
 source category, one-shots, stereo pairs, timing outliers and controlled
@@ -622,11 +637,11 @@ Follow the dependencies in the specification index. Reuse accepted prototype
 code. Add the minimum interface, logic and storage for each outcome. Later
 slices extend working flows and repeat relevant earlier acceptance checks.
 
-| Checkpoint                      | Slice evidence                                                                   |
-| ------------------------------- | -------------------------------------------------------------------------------- |
-| M2: Workspace                   | 001 setup, 002 library, 006 arrangement, 007 section editing and 012 appearance. |
-| M3: Complete sample preparation | 003 compatible input, 004 conversion and 005 review.                             |
-| M4: Saved and rendered work     | 008 mixer, 009 projects, 010 recovery and 011 rendering.                         |
+| Checkpoint                      | Slice evidence                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| M2: Workspace                   | 001 full menu and themes, 002 library, 006 arrangement, 007 section edits and 012 tracker theme integration. |
+| M3: Complete sample preparation | 003 compatible input, 004 conversion and 005 review.                                                         |
+| M4: Saved and rendered work     | 008 mixer, 009 projects, 010 recovery and 011 rendering.                                                     |
 
 These checkpoints summarize integration coverage. They are not separate feature
 approvals. In particular, compatible audio must exist before the arrangement
@@ -901,7 +916,8 @@ material panels. M5 applies the combined workload again to the complete
 application before a release performance claim.
 
 Both plan interviews are complete. The plan is split into twelve product
-specifications. The spec-001 interview is complete. Do not start another
+specifications. Spec-001 now includes the full styled main menu, themes and all
+project entry flows. Its scope expansion has user approval. Do not start another
 specification interview without express user approval. Keep deferred choices
 visible in their owning specification. The split does not authorize application
 implementation.

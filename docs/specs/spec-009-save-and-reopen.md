@@ -11,6 +11,8 @@ their references and positions while available samples remain usable.
 
 This slice depends on `spec-006`. It saves every implemented arrangement and
 mixer value. Repeat its checks when `spec-007` or `spec-008` adds state.
+Spec-001 owns project selection, read validation and tracker entry. This slice
+uses that shared contract for manual-save round trips and missing-file display.
 
 ## Product rules
 
@@ -33,13 +35,13 @@ additional product approvals.
 - Let the user select the main project file for manual saving.
 - Store sample paths relative to the selected sample folder.
 - Reject references that escape that folder. Reject embedded audio.
-- Validate project documents before replacing the current project state.
+- Use spec-001 validation before replacing the current project state.
 - Give each missing-sample bubble a text label that identifies the sample.
 - Keep missing clips' track, duration and original reference.
 - Keep skin selection outside musical project state.
 - Offer file relinking within the selected sample folder.
-- Define unsaved-project handling before adding New project or replacement
-  loads.
+- Define unsaved-project handling when leaving or replacing an active tracker
+  project. Initial menu entry already belongs to spec-001.
 
 ## Acceptance checks
 
@@ -66,11 +68,12 @@ All checks are proposed. No check has been executed.
 
 ## Deferred decisions
 
-- **File format and migrations:** The developer proposes the schema and version
-  rules during this slice's review. Verify round trips and incompatible files.
-- **Unsaved work and failed saves:** The product owner decides replacement-load,
-  New project and interrupted-write behavior. Verify each cancellation and
-  failure.
+- **Write format and migrations:** Use the M0 schema and spec-001 read contract.
+  The developer proposes writer and migration rules during this slice's review.
+  Verify round trips and incompatible files.
+- **Unsaved work and failed saves:** The product owner decides behavior for an
+  active tracker's unsaved state and interrupted writes. Verify cancellation and
+  failure without changing initial menu ownership.
 - **Relinking:** The product owner decides whether to include this recommended
   command. Verify path containment and preservation of clip positions.
 

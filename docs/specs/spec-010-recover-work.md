@@ -9,8 +9,9 @@ changing the manually saved project.
 
 ## Scope and dependencies
 
-This slice depends on `spec-009`. It uses that slice's project validation and
-sample-path rules. It adds automatic recovery copies and a recovery choice.
+This slice depends on `spec-009`. It adds automatic recovery copies using the
+shared project contract. Spec-001 owns discovery, selection and validation of
+available recovery copies before tracker entry.
 
 ## Product rules
 
@@ -33,7 +34,7 @@ additional product approvals.
 - Keep the last valid recovery copy if a new write fails.
 - Report unavailable settings-folder access and unsaved recovery state.
 - Do not use another folder or browser storage as a recovery fallback.
-- Validate a recovery copy before offering to restore it.
+- Use spec-001 validation and selection to restore a recovery copy.
 - Apply the same missing-sample behavior as a normal project load.
 - Restore arrangement state without starting playback or a song render.
 - Prevent concurrent writes to the same project or recovery destination.
@@ -61,9 +62,9 @@ All checks are proposed. No check has been executed.
 
 ## Deferred decisions
 
-- **Recovery interaction:** The product owner decides trigger timing, retained
-  copies and restore-or-dismiss behavior during this slice's review. Verify
-  restart, dismissal and repeated interruptions.
+- **Recovery lifecycle:** The product owner decides retained copies and write
+  lifecycle during this slice's review. Menu selection belongs to spec-001.
+  Verify restart and repeated interruptions.
 - **Write protection:** The developer proposes a replacement and concurrency
   design. The plan does not prove its safety. Verify failures during each write
   phase with filesystem results.

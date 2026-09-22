@@ -55,6 +55,10 @@ browsers. Users make hardcore electronic music using their own samples.
   sections can get the `ready` status in the first release. The first release
   does not change individual notes to change a sample's musical mode.
 - The interface has six skins.
+- The main menu, settings and setup dialogs use the complete six-skin interface
+  before tracker entry. Users can change appearance from the main menu.
+- The main menu supports New project, Open project and selection of available
+  recovery copies. Project validation occurs before tracker entry.
 - Tooltips are the only form of product help. Do not include help pages,
   command-reference panels or tutorials.
 - The first release lets users import samples and edit clips in an arrangement.
