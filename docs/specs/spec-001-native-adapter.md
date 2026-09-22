@@ -62,7 +62,10 @@ the saved folder references.
 Native file tests use real temporary folders and generated data. They compare
 audio hashes and test path escape, junctions, replaced roots, stale reads, write
 conflicts, cancellation and denied writes. Browser tests use the built
-application and compiled extension host with test picker choices.
+application and compiled extension host with test picker choices. The production
+build and extension use the same bundled font. The browser test applies the
+editor's default text size and padding. It checks that application rules take
+precedence.
 
 The full quality gate runs all browser tests without visible windows. The test
 host supplies the editor API boundary. Those tests do not operate the installed

@@ -2,7 +2,7 @@
   "name": "ravefold",
   "displayName": "RaveFold",
   "description": "Make music with user-selected folders in an editor tab.",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "type": "module",
   "publisher": "ravefold-local",
   "license": "UNLICENSED",

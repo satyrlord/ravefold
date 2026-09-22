@@ -84,6 +84,27 @@ test("the built native extension supports folder setup, reload, entry and revoca
     });
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
+    await page.addStyleTag({
+      content:
+        "@layer vscode-default { body { font-family: Arial, sans-serif; font-size: 13px; padding: 0 20px; } }",
+    });
+    const fontState = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return {
+        family: getComputedStyle(document.body).fontFamily,
+        size: getComputedStyle(document.body).fontSize,
+        padding: getComputedStyle(document.body).paddingLeft,
+        loaded: [...document.fonts].filter(
+          (font) =>
+            font.family === "Space Grotesk Variable" &&
+            font.status === "loaded",
+        ).length,
+      };
+    });
+    expect(fontState.family).toMatch(/^"?Space Grotesk Variable/);
+    expect(fontState.size).toBe("16px");
+    expect(fontState.padding).toBe("0px");
+    expect(fontState.loaded).toBeGreaterThan(0);
     host.pickerPaths.push(samples, settings);
     await page
       .getByRole("button", { name: "Folder settings", exact: true })
