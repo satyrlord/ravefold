@@ -10,6 +10,10 @@ RaveFold supports Chromium-based desktop browsers only. Other browser engines
 are outside the product scope. An unavailable feature must not cause the rest of
 the application to fail in a supported browser.
 
+Local development can use configured test folders through a local server. This
+mode permits tracker use inside an editor browser without an editor extension.
+It keeps the same audio protection rules. Production uses browser folder access.
+
 ## Product purpose
 
 RaveFold is a new interpretation of sample-based music software for web

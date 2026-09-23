@@ -415,6 +415,12 @@ unused audio files.
 A local catalog command can read `OG_INSTALL_DIR` and `SAMPLES_DIR` from the
 ignored `.env.local` during development.
 
+The user approved local folder access for tracker development on 2026-09-23.
+`npm run dev:local` uses `SAMPLES_DIR` and `SETTINGS_DIR` through a local
+server. The adapter implements the existing storage interfaces. Production
+builds omit the adapter. [README.md](../README.md) gives the human setup
+procedure.
+
 Do not copy these values into client environment variables, logs, documents,
 manifests, archives or browser output. Store only relative paths and source IDs
 as source history. Do not put the full sample library in public assets or the

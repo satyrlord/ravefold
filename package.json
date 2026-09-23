@@ -10,6 +10,7 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:local": "vite --mode local-folders",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.app.json --noEmit",

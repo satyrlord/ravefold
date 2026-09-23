@@ -1,6 +1,11 @@
 import { defineConfig } from "vite";
+import { localFolderPlugin } from "./scripts/local-folder-plugin.ts";
 
-export default defineConfig({
+export default defineConfig(({ command, mode, isPreview }) => ({
+  plugins:
+    command === "serve" && !isPreview && mode === "local-folders"
+      ? [localFolderPlugin()]
+      : [],
   base: "./",
   build: { target: "es2022" },
   server: { host: "127.0.0.1" },
@@ -15,4 +20,4 @@ export default defineConfig({
       "Referrer-Policy": "no-referrer",
     },
   },
-});
+}));

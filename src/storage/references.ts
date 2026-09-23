@@ -3,6 +3,7 @@ import {
   type DirectoryHandle,
   type FolderKind,
 } from "./handles.ts";
+import { folderProvider } from "./folder-provider.ts";
 
 export interface FolderReferences {
   samples?: DirectoryHandle;
@@ -61,6 +62,18 @@ function openDatabase(): Promise<IDBDatabase> {
 }
 
 export async function loadFolderReferences(): Promise<ReferenceLoad> {
+  const provider = folderProvider();
+  if (provider) {
+    try {
+      return { available: true, references: await provider.roots() };
+    } catch {
+      return {
+        available: false,
+        references: {},
+        message: "Local folders are unavailable. Check the development server.",
+      };
+    }
+  }
   let database: IDBDatabase | undefined;
   try {
     database = await openDatabase();
@@ -93,6 +106,7 @@ export async function saveFolderReference(
   kind: FolderKind,
   handle: DirectoryHandle,
 ): Promise<ReferenceSave> {
+  if (folderProvider()) return { available: true };
   let database: IDBDatabase | undefined;
   try {
     database = await openDatabase();

@@ -106,6 +106,11 @@ host limit when the permission result is denied. Keep entry blocked and keep
 files unchanged. Do not bypass browser permissions. Embedded views keep their
 host permission limits.
 
+Local development can obtain folder handles from the configured local server.
+This explicit mode restores its two configured roots without a browser picker.
+Folder validation and entry requirements still apply. Production omits this
+adapter. [README.md](../../README.md) gives the local setup procedure.
+
 ## Main menu and entry controls
 
 Use the menu to prepare a music session. Give project entry the primary visual

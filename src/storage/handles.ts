@@ -1,3 +1,5 @@
+import { folderProvider } from "./folder-provider.ts";
+
 export type FolderKind = "samples" | "settings";
 export type AccessState = "granted" | "denied" | "prompt";
 
@@ -55,6 +57,7 @@ function pickerWindow(): PickerWindow {
 }
 
 export function pickerAvailable(): boolean {
+  if (folderProvider()) return true;
   return typeof pickerWindow().showDirectoryPicker === "function";
 }
 
@@ -69,6 +72,8 @@ export function accessDeniedMessage(): string {
 }
 
 export async function pickFolder(kind: FolderKind): Promise<DirectoryHandle> {
+  const provider = folderProvider();
+  if (provider) return provider.pick(kind);
   const picker = pickerWindow().showDirectoryPicker;
   if (!picker)
     throw new Error("Folder selection is unavailable in this browser.");
