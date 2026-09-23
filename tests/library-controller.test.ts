@@ -148,6 +148,29 @@ test("controller loads path-specific saved tags without reading sample audio", a
   controller.dispose();
 });
 
+test("an oversized source stays in review without a full audio read", async () => {
+  const root = new LibraryDirectory();
+  const file = root.file("large.wav");
+  let slices = 0;
+  file.getFile = async () =>
+    new (class extends File {
+      override get size(): number {
+        return 101 * 1024 * 1024;
+      }
+      override slice(): Blob {
+        slices++;
+        throw new Error("The oversized source must not be read.");
+      }
+    })([], "large.wav");
+  const controller = new LibraryController(root);
+  await controller.start();
+  await controller.select("large.wav");
+  assert.equal(controller.getSnapshot().analysis?.status, "needs-review");
+  assert.match(controller.getSnapshot().analysis?.message ?? "", /100 MiB/u);
+  assert.equal(slices, 0);
+  controller.dispose();
+});
+
 test("late file metadata and read errors cannot replace the latest selection", async () => {
   for (const fail of [false, true]) {
     const root = new LibraryDirectory();

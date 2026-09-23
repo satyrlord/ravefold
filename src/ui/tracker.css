@@ -397,6 +397,14 @@
   font-size: 10px;
   padding: 5px;
 }
+.preparation-state[data-status="ready"],
+.sample-readiness[data-status="ready"] {
+  color: var(--success);
+}
+.preparation-state[data-status="unusable"],
+.sample-readiness[data-status="unusable"] {
+  color: var(--danger);
+}
 .source-preview-status {
   display: flex;
   flex-shrink: 0;
@@ -644,6 +652,29 @@
 }
 .inspector-section p {
   font-size: 12px;
+}
+.pair-select-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pair-paths {
+  margin: 12px 0;
+}
+.pair-paths dd {
+  overflow-wrap: anywhere;
+}
+.pair-status {
+  color: var(--muted);
+  margin-top: 10px;
+  overflow-wrap: anywhere;
+}
+.pair-status[data-status="ready"] {
+  color: var(--success);
+}
+.pair-status[data-status="error"] {
+  color: var(--danger);
 }
 .editable-tags {
   display: flex;

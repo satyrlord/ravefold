@@ -385,8 +385,9 @@ test("revoked folder access stops preview and preserves the project and unsaved 
   await expect(
     inspector(page).getByText("Tags not saved.", { exact: true }),
   ).toBeVisible();
-  expect((await snapshotFS(page)).sampleMetadata).toEqual(
-    before.sampleMetadata,
+  const metadata = (await snapshotFS(page)).sampleMetadata;
+  expect(metadata["ravefold-tags.manifest.json"]).toBe(
+    before.sampleMetadata["ravefold-tags.manifest.json"],
   );
   await saveTag(page);
   expect(

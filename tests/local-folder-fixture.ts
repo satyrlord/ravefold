@@ -34,9 +34,11 @@ export async function localFolderFixture() {
   await mkdir(settings);
   const audio = localWav();
   await writeFile(join(samples, "Drums", "kick.wav"), audio);
+  const savedSettings = settingsFixture();
+  savedSettings.appearance.effects = "static";
   await writeFile(
     join(settings, "ravefold-settings.json"),
-    JSON.stringify(settingsFixture()),
+    JSON.stringify(savedSettings),
   );
   return {
     root,

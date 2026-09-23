@@ -4,7 +4,13 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import { localFolderPlugin } from "../../scripts/local-folder-plugin.ts";
+import {
+  AUDIO_MANIFEST_FILENAME,
+  parseAudioManifest,
+} from "../../src/domain/audio-manifest.ts";
 import { localFolderFixture } from "../local-folder-fixture.ts";
+
+test.use({ actionTimeout: 30_000 });
 
 let server: ViteDevServer;
 let fixture: Awaited<ReturnType<typeof localFolderFixture>>;
@@ -27,6 +33,8 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  const http = server?.httpServer;
+  if (http && "closeAllConnections" in http) http.closeAllConnections();
   await server?.close();
   await fixture?.dispose();
 });
@@ -34,7 +42,7 @@ test.afterAll(async () => {
 test("local folders support tracker entry, audio and saved tags when browser folder access is denied", async ({
   page,
 }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(150_000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -57,12 +65,27 @@ test("local folders support tracker entry, audio and saved tags when browser fol
   });
   await page.goto(origin);
   await page.getByRole("button", { name: "New project", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Enter tracker", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Drums/kick.wav", exact: true })
-    .click();
+  const enter = page.getByRole("button", {
+    name: "Enter tracker",
+    exact: true,
+  });
+  await expect(enter).toBeEnabled({ timeout: 30_000 });
+  await enter.click();
+  const source = page.getByRole("button", {
+    name: "Drums/kick.wav",
+    exact: true,
+  });
+  await expect(source).toBeVisible({ timeout: 30_000 });
+  await source.click();
+  await expect(page.locator(".sample-readiness")).toHaveText("Needs review", {
+    timeout: 30_000,
+  });
+  const analysis = parseAudioManifest(
+    await readFile(join(fixture.samples, AUDIO_MANIFEST_FILENAME), "utf8"),
+  );
+  expect(analysis.samples["Drums/kick.wav"]?.measured.status).toBe(
+    "needs-review",
+  );
   await page.getByRole("button", { name: "Play source", exact: true }).click();
   await expect(
     page.getByText("Source preview is playing.", { exact: false }),
@@ -94,9 +117,8 @@ test("local folders support tracker entry, audio and saved tags when browser fol
   expect(manifest.samples["Drums/kick.wav"].tags).toEqual(["local-proof"]);
   await page.reload();
   await page.getByRole("button", { name: "New project", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Enter tracker", exact: true })
-    .click();
+  await expect(enter).toBeEnabled({ timeout: 30_000 });
+  await enter.click();
   await page
     .getByRole("searchbox", { name: "Search files or tags", exact: true })
     .fill("local-proof");

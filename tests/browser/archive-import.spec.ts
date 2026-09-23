@@ -54,7 +54,7 @@ test("an empty folder becomes valid and archive retry protects existing audio", 
     page.getByRole("progressbar", { name: "Archive import progress" }),
   ).toBeVisible();
   await expect(
-    page.getByRole("status").filter({ hasText: "1 WAV sample is ready" }),
+    page.getByRole("status").filter({ hasText: "1 WAV sample imported" }),
   ).toBeVisible();
   await expect(
     page.getByText("Sample folder is ready.", { exact: true }),
@@ -63,12 +63,38 @@ test("an empty folder becomes valid and archive retry protects existing audio", 
   expect(first.selectedAudio.map((file) => file.path)).toContain(
     "Empty samples/Rave eJay ISO/RAVE/AA/TEST.wav",
   );
+  const sourceWrites = first.writes.filter((write) =>
+    write.path.endsWith("/ravefold-sources.manifest.json"),
+  );
+  expect(sourceWrites).toHaveLength(1);
+  const sources = JSON.parse(sourceWrites[0]!.contents) as {
+    revision: number;
+    sources: Record<
+      string,
+      { sha256: string; bytes: number; provenance: string }
+    >;
+  };
+  const imported = first.selectedAudio.find((file) =>
+    file.path.endsWith("/RAVE/AA/TEST.wav"),
+  )!;
+  expect(sources.revision).toBe(1);
+  expect(sources.sources["Rave eJay ISO/RAVE/AA/TEST.wav"]).toMatchObject({
+    sha256: imported.hash,
+    bytes: imported.bytes,
+    provenance: "og-archive-import",
+  });
   await expect(button).toBeEnabled();
   await button.click();
   await expect(
-    page.getByRole("status").filter({ hasText: "1 WAV sample is ready" }),
+    page.getByRole("status").filter({ hasText: "1 WAV sample imported" }),
   ).toBeVisible();
-  expect((await snapshotFS(page)).selectedAudio).toEqual(first.selectedAudio);
+  const retried = await snapshotFS(page);
+  expect(retried.selectedAudio).toEqual(first.selectedAudio);
+  expect(
+    retried.writes.filter((write) =>
+      write.path.endsWith("/ravefold-sources.manifest.json"),
+    ),
+  ).toHaveLength(1);
   await page.evaluate(() =>
     window.fixtureFS.changeSelectedAudio("Rave eJay ISO/RAVE/AA/TEST.wav"),
   );
@@ -115,11 +141,22 @@ test("stopping a browser write keeps the empty file and retry uses a new name", 
   await expect(button).toBeEnabled();
   await button.click();
   await expect(
-    page.getByRole("status").filter({ hasText: "1 WAV sample is ready" }),
+    page.getByRole("status").filter({ hasText: "1 WAV sample imported" }),
   ).toBeVisible();
   const finished = (await snapshotFS(page)).selectedAudio;
   expect(finished).toContainEqual(partial[0]!);
   expect(finished.map((file) => file.path)).toContain(
     "Empty samples/Rave eJay ISO/RAVE/AA/TEST (2).wav",
   );
+  const sourceWrites = (await snapshotFS(page)).writes.filter((write) =>
+    write.path.endsWith("/ravefold-sources.manifest.json"),
+  );
+  expect(sourceWrites).toHaveLength(1);
+  const sources = JSON.parse(sourceWrites[0]!.contents) as {
+    sources: Record<string, { provenance: string }>;
+  };
+  expect(sources.sources["Rave eJay ISO/RAVE/AA/TEST.wav"]).toBeUndefined();
+  expect(
+    sources.sources["Rave eJay ISO/RAVE/AA/TEST (2).wav"]?.provenance,
+  ).toBe("og-archive-import");
 });

@@ -1,4 +1,8 @@
 import { validateWav } from "../domain/wav.ts";
+import {
+  saveArchiveSources,
+  type ArchiveSourceInput,
+} from "../library/source-manifest.ts";
 import { checkAbort, isNamedError } from "../storage/handles.ts";
 import type { DirectoryHandle, FileHandle } from "../storage/handles.ts";
 
@@ -233,7 +237,7 @@ async function writeWav(
   name: string,
   wav: Uint8Array<ArrayBuffer>,
   signal: AbortSignal,
-): Promise<void> {
+): Promise<string> {
   const stem = name.slice(0, -4);
   let outputName = "";
   for (let attempt = 1; attempt <= 100; attempt++) {
@@ -245,7 +249,7 @@ async function writeWav(
       break;
     }
     const file = await existing.getFile();
-    if (await sameBytes(file, wav, signal)) return;
+    if (await sameBytes(file, wav, signal)) return candidate;
     if (attempt === 1 && file.size > 0)
       throw new Error(`${name} already exists with different audio.`);
   }
@@ -266,6 +270,7 @@ async function writeWav(
     closed = true;
     if (!(await sameBytes(await handle.getFile(), wav, signal)))
       throw new Error(`${outputName} could not be verified after writing.`);
+    return outputName;
   } finally {
     if (!closed) await writer.abort().catch(() => undefined);
   }
@@ -291,6 +296,8 @@ export async function importArchiveSamples(
   signal: AbortSignal,
   onProgress: (progress: ImportProgress) => void,
 ): Promise<void> {
+  if (members.length === 0)
+    throw new Error("The archive contains no samples to import.");
   const decoder = new PxdDecoder();
   const task = new AbortController();
   const stop = () => task.abort();
@@ -302,6 +309,7 @@ export async function importArchiveSamples(
   let next = 0;
   let completed = 0;
   let failure: Error | undefined;
+  const sourceRows: ArchiveSourceInput[] = [];
   try {
     const run = async () => {
       while (!task.signal.aborted && next < members.length) {
@@ -314,7 +322,27 @@ export async function importArchiveSamples(
           if (!(await validateWav(new Blob([wav]), task.signal)).valid)
             throw new Error("Conversion produced an invalid WAV file.");
           const output = await outputDirectory(root, member);
-          await writeWav(output.directory, output.name, wav, task.signal);
+          const name = await writeWav(
+            output.directory,
+            output.name,
+            wav,
+            task.signal,
+          );
+          checkAbort(task.signal);
+          const digest = await crypto.subtle.digest("SHA-256", wav);
+          checkAbort(task.signal);
+          const sha256 = Array.from(new Uint8Array(digest), (byte) =>
+            byte.toString(16).padStart(2, "0"),
+          ).join("");
+          sourceRows.push({
+            path: [
+              OUTPUT_FOLDER,
+              ...member.path.split("/").slice(0, -1),
+              name,
+            ].join("/"),
+            sha256,
+            bytes: wav.byteLength,
+          });
           completed++;
           onProgress({ completed, total: members.length });
         } catch (error) {
@@ -332,6 +360,7 @@ export async function importArchiveSamples(
     await Promise.allSettled(tasks);
     if (failure) throw failure;
     checkAbort(signal);
+    await saveArchiveSources(root, sourceRows, signal);
   } finally {
     signal.removeEventListener("abort", stop);
     task.signal.removeEventListener("abort", stopDecoder);

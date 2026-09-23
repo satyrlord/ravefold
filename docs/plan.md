@@ -81,6 +81,9 @@ piano-roll editor to this release. The fixed tempo and key are product features.
 - Keep major and mixed-key imports in review. Use only compatible sections in
   the first release. A pitch shift of the full signal does not change its
   musical mode.
+- Analyze every source before it gets `ready` status. Record the official OG
+  collection declaration separately. It cannot replace file and musical
+  analysis.
 
 ### Recommended behavior
 
@@ -122,6 +125,11 @@ key detector cannot prove that each note is compatible. Store source metadata,
 measurements, confidence scores, manual corrections and prepared values
 independently.
 
+The official OG collection declaration of 180 BPM and C minor is source
+information. It does not verify values for each file or give `ready` status.
+Analyze every source, even when its declaration matches project values. A user
+correction does not replace analysis.
+
 For tonal audio in a minor key, transpose to C with the nearest signed semitone
 offset. Give the user a control for octave adjustment. Accept natural, harmonic
 and melodic minor after transposition to C. Keep uncertain key results in
@@ -130,8 +138,8 @@ conversion is completed.
 
 A one-shot is a sound for one playback, not a loop. Unpitched one-shots have
 user approval for use without musical conversion. Do not invent a detected BPM
-or musical key for them. File validation is necessary before `ready` status.
-Detector uncertainty is a different decision.
+or musical key for them. Analyze each one-shot to confirm its unpitched class.
+File validation and musical analysis are necessary before `ready` status.
 
 Unpitched drum and noise loops are key-neutral, with no musical key. Prepare
 them at 90 or 180 BPM. Do not apply pitch shifting to these loops. Tuned
@@ -456,13 +464,16 @@ that folder.
 2. Read the source file without changing it. Save the job record in a manifest
    before audio preparation. Parse the supported WAV formats in the Worker. Do
    not assume that a Worker has `decodeAudioData`.
-3. Analyze BPM, phrase boundaries, tuning, root, mode and tonal class. Validate
-   declared metadata first. Do a test with a labeled audio corpus before you
-   select a detector and confidence thresholds. A corpus is the collection of
-   audio examples for these tests. This plan does not select a detector.
+3. Analyze each source for its rhythmic and tonal class. Measure BPM, phrase
+   boundaries, tuning, root and mode where they apply. Record declared metadata
+   separately from measurements. Test detector candidates with labeled audio
+   before you select one and set confidence thresholds. A corpus is the
+   collection of audio examples for these tests. This plan does not select a
+   detector.
 4. If confidence is too low, get the source BPM, key or loop markers from the
    user. OG source information declares 180 BPM and C minor. This declaration
-   does not prove that each file is tonal or has correct loop boundaries. Keep
+   does not prove that each file is tonal or has correct loop boundaries. Do not
+   use this declaration or a user correction alone to give `ready` status. Keep
    major and mixed-key sections in review. Analyze them again after the user
    selects compatible sections.
 5. Prepare a selected 90 BPM or 180 BPM target. Change duration without a pitch
@@ -625,16 +636,15 @@ thirteen product slices. Each slice has a user outcome, dependencies and
 acceptance checks. The slices include all technical layers necessary for that
 outcome. Do not divide product delivery by UI, storage and audio layers.
 
-M0 and M1 stay evidence prerequisites for the full workspace. M2 through M4 are
-integration checkpoints. Their labels do not override slice dependencies. A
-draft specification does not give approval for its proposed behavior or
-implementation.
+M0 supplies entry and project contracts. M1 supplies audio and interface
+evidence for technical choices. M2 through M4 are integration checkpoints. Their
+labels do not override slice dependencies. Spec-003 has no M0 audio corpus
+approval gate. A draft alone does not authorize implementation.
 
 ### M0: Contracts and catalog
 
 Give versions to the musical, import and project contracts. Make a private asset
-manifest. Examine stereo pairs and unusual timing values. Keep source files
-unchanged.
+manifest. Keep source files unchanged.
 
 Write the contract for reading project metadata before spec-001 acceptance.
 Write the recovery fixtures and settings schema before that acceptance too. Its
@@ -642,22 +652,11 @@ Open and recovery functions must operate before subsequent project writers are
 available. Use generated fixtures with no audio. A fixture is test data with
 known properties.
 
-The product owner and audio developer select the labeled corpus and acceptance
-criteria. Get product-owner approval before M1 acceptance tests. Include each
-source category, one-shots, stereo pairs, timing outliers and controlled
-imports.
-
 Acceptance evidence:
 
-- Header-derived timing records and private source-pair evidence.
-- A labeled corpus and specified criteria for each supported sample class.
-- Criteria for usable coverage, incorrect results and manual review.
 - Folder-validity, permission, settings-location and project-path contracts.
-- Uncertain samples without `ready` status.
 
-The initial recommendation is no silent incorrect `ready` result in labeled
-fixtures. Numerical values and tool choices stay open where measurements are
-necessary. Section 9 identifies their owners and evidence.
+Section 9 identifies the open technical choices.
 
 ### M1: Audio, folder and interface proof
 
@@ -668,11 +667,12 @@ for browser tests of this UI prototype.
 
 Acceptance evidence:
 
-- Correct tempo, pitch and duration against the corpus criteria with approval.
+- Correct tempo, pitch and duration against labeled source cases.
 - Four source beats at 90 BPM occupy eight arrangement beats at natural speed.
 - Repeatable loop, seek, cancellation and interruption results.
-- One result for each category: correct-ready, incorrect-ready, review and
-  unusable counts.
+- Analysis results for each source before `ready` status.
+- Correct-ready, incorrect-ready, review and unusable counts by source class.
+- Header-derived timing records and source-pair evidence.
 - Listening review and CPU/memory measurements during combined audio and UI
   load.
 - Folder permission, new-file-write and capability-fallback results.
@@ -710,7 +710,7 @@ fallbacks, playback during import, recovery and rendered output. Examine all
 persistent writes. Compare audio hashes after storage operations. Make sure that
 distribution contains no samples, private research or local path values.
 
-Use the targets in section 8 only after approval of the necessary criteria.
+Use the targets in section 8 as proposals until measurements support them.
 Document measured results, remaining limits and unverified behavior. Static
 hosting must serve the built assets with the necessary MIME types, paths and
 security policy. A development-server result is not sufficient.
@@ -905,7 +905,7 @@ subject to the sample-folder and preparation requirements.
 | Mixer                             | Basic controls only in the first release. It does not include processing effects.                                | M4 matching playback and export behavior.                            |
 | Project controls                  | RaveFold projects only. Use select-all and delete instead of a Clear arrangement command.                        | M2 undo. M4 project save, load and recovery.                         |
 | Import and export                 | User audio, background preparation and stereo WAV or MP3 export keep their user approval.                        | M3 preparation. M4 export timing, mix and destination checks.        |
-| Split stereo                      | Pair validation is planned. Historical channel layout is not an interface requirement.                           | M0 pair evidence. M3 alignment tests.                                |
+| Split stereo                      | Pair validation is planned. Historical channel layout is not an interface requirement.                           | M1 pair evidence. M3 alignment tests.                                |
 | Recording and synthesis           | Not part of the first release.                                                                                   | Examination of first-release features.                               |
 | Supplied sounds and example songs | Excluded. Users choose or import samples.                                                                        | M2 distribution contains no samples or demo songs.                   |
 | Help                              | Tooltips only. No help pages, command-reference panels or tutorials.                                             | M2 pointer and keyboard access to tooltips.                          |
@@ -918,27 +918,23 @@ decision.
 
 ### Deferred technical decisions
 
-The M0/M1 evidence process for the remaining technical choices has user
-approval. This decision ended the first plan interview. It does not give
-approval for the numerical targets or select a detector, DSP package, browser
-version range or hardware minimum. All such values stay recommendations until
-the necessary evidence and decisions are completed. Fixed product requirements
-do not change.
+M0 entry and project contracts remain. The user removed the M0 audio corpus
+approval gate for spec-003. Each source must pass file and musical analysis
+before `ready` status. The official collection declaration cannot replace this
+analysis. Numerical targets, detector selection and confidence thresholds remain
+open until M1 evidence is available.
 
-M0 gives the test corpus and acceptance criteria for product-owner approval. M1
-measures the candidates against those criteria. The developer then proposes
-selections from the results. Record the evidence and decisions in the
-specification for each subject.
+M1 tests detector candidates with labeled source cases. The developer proposes
+technical choices from the results. Record evidence and decisions in the
+specification for each subject. The initial recommendation is no silent
+incorrect `ready` result in labeled cases.
 
-The initial recommendation is no silent incorrect `ready` result in labeled
-fixtures. M0 must include that recommendation in the criteria for approval.
-
-| Deferred decision                       | Owner and decision stage                                                                                           | Reason for deferral                                                                                            | Necessary evidence                                                                                                          |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Corpus and acceptance criteria          | Product owner and audio developer in M0. Product owner gives approval before M1 acceptance tests.                  | Representative examples and specified quality limits are necessary for sample classes.                         | Labeled samples and proposed limits for usable coverage, incorrect results and manual-review work in each class.            |
-| Detector confidence                     | Audio developer proposes thresholds after M1. Product owner accepts the result against the criteria with approval. | No measured detector results were available during planning.                                                   | Correct `ready`, incorrect `ready`, review and unusable counts for the corpus with approval.                                |
-| DSP and detector selection              | Audio developer proposes the selection from M1 results.                                                            | No prototype evidence was available for library suitability, audio quality or processing cost during planning. | Worker operation, license review, timing, conversion quality, listening review and combined audio/UI workload measurements. |
-| Browser versions, capacity and hardware | Developer proposes supported limits after M1. Product owner gives approval.                                        | Measurements on the production build are necessary for supported versions and capacity.                        | Named browser versions, documented hardware, workload, method, results and capability-fallback behavior.                    |
+| Deferred decision                       | Owner and decision stage                                                            | Reason for deferral                                                                                            | Necessary evidence                                                                                                          |
+| --------------------------------------- | ----------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Labeled source evaluation               | Audio developer in M1. Product owner reviews the results before detector selection. | Representative examples are necessary for sample classes.                                                      | Labeled samples and measured usable coverage, incorrect results and manual-review work in each class.                       |
+| Detector confidence                     | Audio developer proposes thresholds after M1. Product owner reviews the proposal.   | No measured detector results were available during planning.                                                   | Correct-ready, incorrect-ready, review and unusable counts by source class.                                                 |
+| DSP and detector selection              | Audio developer proposes the selection from M1 results.                             | No prototype evidence was available for library suitability, audio quality or processing cost during planning. | Worker operation, license review, timing, conversion quality, listening review and combined audio/UI workload measurements. |
+| Browser versions, capacity and hardware | Developer proposes supported limits after M1. Product owner gives approval.         | Measurements on the production build are necessary for supported versions and capacity.                        | Named browser versions, documented hardware, workload, method, results and capability-fallback behavior.                    |
 
 Detailed behavior stays subject to the review of its specification. Examples
 include overlap handling, hidden-tab playback and export encoding. This deferral
@@ -986,9 +982,12 @@ request. That slice includes sample discovery and the complete tracker view
 design. The workspace shows project values while later arrangement, playback,
 mix and export behavior remains in its respective slices.
 
-The audio corpus and its criteria still need approval before M1 audio acceptance
-tests. Use M1 evidence for deferred selections before the full workspace
-implementation. Each slice still requires its own authorization.
+The user authorized spec-003 implementation on 2026-09-23. Every source must
+pass file and musical analysis before `ready` status. The official collection
+declaration stays separate from each result. Generated labeled tests and the
+local OG collection informed the current detector. That collection had 80.11
+percent ready coverage in the final evaluation. Independent per-file labels and
+listening review remain open. There is no M0 corpus approval gate for spec-003.
 
 On 2026-09-23, the user requested one-click OG archive sample import from the
 main menu. [Spec-013](specs/spec-013-import-og-archive.md) records this separate

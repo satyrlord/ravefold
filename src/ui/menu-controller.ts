@@ -373,7 +373,7 @@ export class MenuController {
           status: "complete",
           completed: members.length,
           total: members.length,
-          message: `${members.length} WAV sample${members.length === 1 ? " is" : "s are"} ready in ${handle.name}/Rave eJay ISO.`,
+          message: `${members.length} WAV sample${members.length === 1 ? "" : "s"} imported into ${handle.name}/Rave eJay ISO.`,
         },
       });
     } catch (error) {

@@ -29,18 +29,25 @@ names cannot select absolute paths or parent folders. Symbolic links and
 directory junctions are rejected. Root identity checks detect replaced
 configured folders.
 
-Metadata writes use the existing settings, tags, access probe, and reservation
-schemas. The host stages writes and checks the prior file before commit. New WAV
-writes validate audio before publication. A conflicting name prevents
-publication. New WAV writes are limited to 64 MiB. The host cannot replace or
-delete existing audio.
+Metadata writes use the settings, tags, audio analysis, stereo pair, source
+record, access probe and reservation schemas. The host stages writes and checks
+the prior file before commit. New WAV writes validate audio before publication.
+A conflicting name prevents publication. New WAV writes are limited to 64 MiB.
+The host cannot replace or delete existing audio.
+
+Use source registration only for a folder whose OG origin the user confirms. Run
+`npm run register:local-source -- --dry-run` to check its metadata and WAV files
+without a write. Run `npm run register:local-source` to create a source manifest
+with file hashes. The tool does not change WAV files or replace a different
+manifest. Menu archive import adds source records after conversion.
 
 Cancellation discards staged data. Server shutdown releases active writers.
 Writers expire after 60 seconds without a successful data write. Expiry removes
-staged data and releases the write lock. Abandoned tag reservations use the
-recovery procedure in [the tag contract](tag-write-protocol.md). Identity checks
-detect ordinary external changes. They do not supply an operating-system lock
-against a hostile local process that changes paths at the same time.
+staged data and releases the write lock. Abandoned sample metadata reservations
+use the recovery procedure in [the tag contract](tag-write-protocol.md).
+Identity checks detect ordinary external changes. They do not supply an
+operating-system lock against a hostile local process that changes paths at the
+same time.
 
 ## Verification boundary
 

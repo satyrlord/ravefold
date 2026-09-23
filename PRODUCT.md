@@ -64,6 +64,8 @@ each clip. A skin is a set of interface appearance settings.
 - A background process does the necessary time stretching and pitch shifting. A
   sample gets the `ready` status only after the process is completed without
   errors.
+- The application analyzes each sample before it gives the sample `ready`
+  status. Declared source tempo or key alone cannot make a sample ready.
 - Unpitched one-shots keep their source sound and duration. A one-shot is a
   sound for one playback, not a loop. Tempo and key conversion are not
   necessary. Their start position uses the arrangement grid.

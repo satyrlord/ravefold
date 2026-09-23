@@ -26,6 +26,21 @@ import {
   MAX_TAGS_BYTES,
 } from "../src/domain/library-tags.ts";
 import {
+  AUDIO_MANIFEST_FILENAME,
+  MAX_AUDIO_MANIFEST_BYTES,
+  parseAudioManifest,
+} from "../src/domain/audio-manifest.ts";
+import {
+  PAIR_MANIFEST_FILENAME,
+  MAX_PAIR_MANIFEST_BYTES,
+  parsePairManifest,
+} from "../src/domain/pair-manifest.ts";
+import {
+  SOURCE_MANIFEST_FILENAME,
+  MAX_SOURCE_MANIFEST_BYTES,
+  parseSourceManifest,
+} from "../src/domain/source-manifest.ts";
+import {
   parseTagReservation,
   TAG_RESERVATION_PATTERN,
   MAX_TAG_RESERVATION_BYTES,
@@ -246,6 +261,12 @@ export class LocalFolderHost {
         return MAX_SETTINGS_BYTES;
       if (entry.root === "samples" && name === TAGS_FILENAME)
         return MAX_TAGS_BYTES;
+      if (entry.root === "samples" && name === AUDIO_MANIFEST_FILENAME)
+        return MAX_AUDIO_MANIFEST_BYTES;
+      if (entry.root === "samples" && name === PAIR_MANIFEST_FILENAME)
+        return MAX_PAIR_MANIFEST_BYTES;
+      if (entry.root === "samples" && name === SOURCE_MANIFEST_FILENAME)
+        return MAX_SOURCE_MANIFEST_BYTES;
       if (PROBE.test(name)) return 256;
       if (entry.root === "samples" && TAG_RESERVATION_PATTERN.test(name))
         return MAX_TAG_RESERVATION_BYTES;
@@ -554,6 +575,18 @@ export class LocalFolderHost {
     }
     if (entry.name === TAGS_FILENAME) {
       parseTagManifest(source);
+      return;
+    }
+    if (entry.name === AUDIO_MANIFEST_FILENAME) {
+      parseAudioManifest(source);
+      return;
+    }
+    if (entry.name === PAIR_MANIFEST_FILENAME) {
+      parsePairManifest(source);
+      return;
+    }
+    if (entry.name === SOURCE_MANIFEST_FILENAME) {
+      parseSourceManifest(source);
       return;
     }
     if (TAG_RESERVATION_PATTERN.test(entry.name)) {

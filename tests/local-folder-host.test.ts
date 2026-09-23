@@ -14,6 +14,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { LocalFolderHost } from "../scripts/local-folder-host.ts";
+import { AUDIO_MANIFEST_FILENAME } from "../src/domain/audio-manifest.ts";
+import { PAIR_MANIFEST_FILENAME } from "../src/domain/pair-manifest.ts";
+import { SOURCE_MANIFEST_FILENAME } from "../src/domain/source-manifest.ts";
 import type {
   LocalHandle,
   LocalFileInfo,
@@ -144,6 +147,33 @@ test("local host writes validated settings atomically and rejects stale or compe
     await assert.rejects(f.host.dispatch({ op: "close", writer: invalid }));
     assert.equal(await readFile(location, "utf8"), data + "\n");
     assert.deepEqual(await readdir(f.settings), [name]);
+  } finally {
+    await f.cleanup();
+  }
+});
+
+test("local host accepts analysis manifests only in the sample folder", async () => {
+  const f = await fixture();
+  try {
+    for (const [name, records] of [
+      [AUDIO_MANIFEST_FILENAME, "samples"],
+      [PAIR_MANIFEST_FILENAME, "pairs"],
+      [SOURCE_MANIFEST_FILENAME, "sources"],
+    ] as const) {
+      const file = await child(f.host, f.roots.samples, name);
+      const valid = JSON.stringify({
+        schemaVersion: 1,
+        revision: 0,
+        [records]: {},
+      });
+      const first = await writer(f.host, file, valid);
+      await f.host.dispatch({ op: "close", writer: first });
+      assert.equal(await readFile(path.join(f.samples, name), "utf8"), valid);
+      const invalid = await writer(f.host, file, "{}");
+      await assert.rejects(f.host.dispatch({ op: "close", writer: invalid }));
+      assert.equal(await readFile(path.join(f.samples, name), "utf8"), valid);
+      await assert.rejects(child(f.host, f.roots.settings, name));
+    }
   } finally {
     await f.cleanup();
   }

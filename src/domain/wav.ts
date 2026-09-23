@@ -4,6 +4,7 @@ export interface WavInfo {
   sampleRate: number;
   frames: number;
   duration: number;
+  loop?: { startFrame: number; endFrameExclusive: number };
 }
 
 export type WavValidation =
@@ -46,11 +47,15 @@ export async function validateWav(
   const end = header.getUint32(4, true) + 8;
   if (end > file.size || end < 44)
     return invalid("The WAV data is incomplete.");
+  if (end !== file.size)
+    return invalid("The WAV container size does not match the file.");
   let format: DataView | undefined;
   let formatSize = 0;
   let dataOffset = 0;
   let dataSize = 0;
   let sawData = false;
+  let sawSampler = false;
+  let loop: WavInfo["loop"];
   let offset = 12;
   while (offset < end) {
     if (offset + 8 > end) return invalid("A WAV chunk header is incomplete.");
@@ -58,17 +63,44 @@ export async function validateWav(
     const size = chunk.getUint32(4, true);
     const next = offset + 8 + size + (size % 2);
     if (next > end) return invalid("A WAV chunk is incomplete.");
-    if (tag(chunk, 0) === "fmt ") {
+    const kind = tag(chunk, 0);
+    if (kind === "fmt ") {
       if (format || size < 16) return invalid("The WAV format is invalid.");
       format = await viewAt(file, offset + 8, Math.min(size, 40), signal);
       formatSize = size;
     }
-    if (tag(chunk, 0) === "data") {
+    if (kind === "data") {
       if (sawData)
         return invalid("Multiple WAV data chunks are not supported.");
       sawData = true;
       dataOffset = offset + 8;
       dataSize = size;
+    }
+    if (kind === "smpl") {
+      if (sawSampler)
+        return invalid("Multiple WAV sampler chunks are not supported.");
+      sawSampler = true;
+      if (size < 36) return invalid("The WAV loop marker is incomplete.");
+      const marker = await viewAt(file, offset + 8, Math.min(size, 60), signal);
+      const count = marker.getUint32(28, true);
+      const samplerBytes = marker.getUint32(32, true);
+      if (count > 1)
+        return invalid("Multiple WAV loop markers are not supported.");
+      if (size !== 36 + count * 24 + samplerBytes)
+        return invalid("The WAV loop marker size is invalid.");
+      if (count === 1) {
+        if (
+          marker.getUint32(40, true) !== 0 ||
+          marker.getUint32(52, true) !== 0
+        )
+          return invalid("The WAV loop marker type is not supported.");
+        const startFrame = marker.getUint32(44, true);
+        const endFrame = marker.getUint32(48, true);
+        if (startFrame > endFrame)
+          return invalid("The WAV loop marker has invalid boundaries.");
+        // RIFF smpl stores the final frame as an inclusive index.
+        loop = { startFrame, endFrameExclusive: endFrame + 1 };
+      }
     }
     offset = next;
   }
@@ -135,6 +167,8 @@ export async function validateWav(
   }
   signal?.throwIfAborted();
   const frames = dataSize / alignment;
+  if (loop && loop.endFrameExclusive > frames)
+    return invalid("The WAV loop marker is outside the audio.");
   return {
     valid: true,
     info: {
@@ -143,6 +177,7 @@ export async function validateWav(
       sampleRate,
       frames,
       duration: frames / sampleRate,
+      ...(loop ? { loop } : {}),
     },
   };
 }

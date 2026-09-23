@@ -56,10 +56,10 @@ Show which prepared result the current review action produced.
 
 ## Deferred decisions
 
-| Choice                              | Owner and reason                                                                                                                 | Verification                                    |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Correction authority and confidence | Product owner and audio developer, future review after M1. The risk of incorrect `ready` status makes corpus evidence necessary. | Disputed detector cases against M0 criteria.    |
-| Region controls and minimum length  | Product owner and developer, future slice review. No detailed editing interaction is approved.                                   | Pointer and keyboard region-selection fixtures. |
+| Choice                              | Owner and reason                                                                                                                 | Verification                                     |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| Correction authority and confidence | Product owner and audio developer, future review after M1. The risk of incorrect `ready` status makes source evidence necessary. | Disputed detector cases in labeled source tests. |
+| Region controls and minimum length  | Product owner and developer, future slice review. No detailed editing interaction is approved.                                   | Pointer and keyboard region-selection fixtures.  |
 
 ## Out of scope
 

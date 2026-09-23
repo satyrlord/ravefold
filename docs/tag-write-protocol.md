@@ -17,6 +17,10 @@ Each writer changes only its own register. The application treats an empty
 register as an unfinished ticket choice. Invalid registers prevent a save.
 Register writes replace complete content when the file writer closes.
 
+Audio analysis and stereo pair saves use the same registers. They write separate
+manifests with source hashes and measured results. They do not change tags or
+audio files. A failed manifest save cannot give a source `ready` status.
+
 ## Sequence
 
 1. Create a unique register in the sample folder.
@@ -74,8 +78,8 @@ or replaced registers remain in place.
 1. Close all RaveFold browser tabs.
 2. Open the selected sample folder in the operating system file manager.
 3. Remove only abandoned `.ravefold-tags-lock-<uuid>.manifest.json` files.
-4. Keep `ravefold-tags.manifest.json` and all audio files unchanged.
-5. Open RaveFold and retry the tag save.
+4. Keep all sample manifests and audio files unchanged.
+5. Open RaveFold and retry the sample metadata save.
 
 Do not remove reservations while any RaveFold session remains open. The register
 pattern requires a UUID with hexadecimal groups of 8, 4, 4, 4 and 12 characters.

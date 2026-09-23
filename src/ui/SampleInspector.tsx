@@ -7,6 +7,21 @@ import { MaterialSurface } from "../skins/MaterialRoot.tsx";
 import { Button, Icon } from "./controls.tsx";
 import { TrackerIcon } from "./tracker-icons.tsx";
 
+const PITCH_NAMES = [
+  "C",
+  "C sharp",
+  "D",
+  "E flat",
+  "E",
+  "F",
+  "F sharp",
+  "G",
+  "A flat",
+  "A",
+  "B flat",
+  "B",
+] as const;
+
 export function SampleInspector({
   state,
   controller,
@@ -19,6 +34,8 @@ export function SampleInspector({
   onClose: () => void;
 }) {
   const sample = state.catalog.rows.find((row) => row.path === state.selected);
+  const analysis =
+    state.analysis?.path === sample?.path ? state.analysis : undefined;
   const [tag, setTag] = useState("");
   const [error, setError] = useState("");
   const [waveform, setWaveform] = useState<SourceWaveform | null>(null);
@@ -96,7 +113,23 @@ export function SampleInspector({
         <div className="inspector-body">
           <h3 className="inspector-filename">{sample.name}</h3>
           <p className="relative-path">{sample.path}</p>
-          <p className="sample-readiness">Not prepared</p>
+          <p
+            className="sample-readiness"
+            data-status={analysis?.status}
+            role="status"
+          >
+            {analysis?.status === "ready"
+              ? "Ready"
+              : analysis?.status === "needs-conversion"
+                ? "Needs conversion"
+                : analysis?.status === "needs-review"
+                  ? "Needs review"
+                  : analysis?.status === "unusable"
+                    ? "Unusable"
+                    : analysis?.status === "error"
+                      ? "Analysis unavailable"
+                      : "Analyzing source"}
+          </p>
           <div className="waveform-panel">
             {waveform ? (
               <svg
@@ -135,13 +168,23 @@ export function SampleInspector({
               <TrackerIcon name="play" />
               Play source
             </Button>
-            <Button
-              className="tracker-button"
-              aria-disabled="true"
-              tip="This sample has no prepared audio."
-            >
-              Play prepared
-            </Button>
+            {analysis?.status === "ready" ? (
+              <Button
+                className="tracker-button"
+                onClick={() => void preview.play(sample)}
+                tip="Play the analyzed source without a change to its audio."
+              >
+                Play ready source
+              </Button>
+            ) : (
+              <Button
+                className="tracker-button"
+                aria-disabled="true"
+                tip="This sample has no ready audio."
+              >
+                Play prepared
+              </Button>
+            )}
           </div>
           {state.metadata ? (
             <dl className="sample-metadata">
@@ -167,9 +210,159 @@ export function SampleInspector({
               {state.metadataMessage}
             </p>
           )}
+          <section className="inspector-section" aria-label="Audio analysis">
+            <h3>Analysis</h3>
+            <p className="inspector-message" role="status">
+              {analysis?.message ?? "Select a source to start analysis."}
+            </p>
+            {analysis?.status === "error" && (
+              <Button
+                className="tracker-button"
+                onClick={() => void controller.select(sample.path)}
+                tip="Read and analyze this source again."
+              >
+                Check again
+              </Button>
+            )}
+            {analysis?.result && (
+              <dl className="sample-metadata">
+                <dt>Sound class</dt>
+                <dd>
+                  {analysis.result.analysis.measured.sampleKind.replaceAll(
+                    "-",
+                    " ",
+                  )}
+                </dd>
+                {analysis.result.analysis.measured.bpm !== undefined && (
+                  <>
+                    <dt>
+                      {analysis.result.analysis.measured.sampleKind.startsWith(
+                        "source-backed-",
+                      )
+                        ? "Validated source tempo"
+                        : "Measured tempo"}
+                    </dt>
+                    <dd>{analysis.result.analysis.measured.bpm} BPM</dd>
+                  </>
+                )}
+                {analysis.result.analysis.measured.key && (
+                  <>
+                    <dt>Measured key</dt>
+                    <dd>
+                      {analysis.result.analysis.measured.key}{" "}
+                      {analysis.result.analysis.measured.minorForm} minor
+                    </dd>
+                  </>
+                )}
+                {analysis.result.analysis.measured.compatiblePitchClasses && (
+                  <>
+                    <dt>Compatible notes</dt>
+                    <dd>
+                      {analysis.result.analysis.measured.compatiblePitchClasses
+                        .map((pitch) => PITCH_NAMES[pitch])
+                        .join(", ")}
+                    </dd>
+                  </>
+                )}
+                {analysis.result.analysis.measured.compatibleMinorForms && (
+                  <>
+                    <dt>Compatible forms</dt>
+                    <dd>
+                      {analysis.result.analysis.measured.compatibleMinorForms.join(
+                        ", ",
+                      )}
+                    </dd>
+                  </>
+                )}
+              </dl>
+            )}
+            {analysis?.result?.analysis.measured.sampleKind.startsWith(
+              "source-backed-",
+            ) && (
+              <p className="muted">
+                Audio checks passed. The source record supplies the declared
+                musical values; no source key was detected from this file.
+              </p>
+            )}
+            <p className="muted">
+              Declared source values:{" "}
+              {analysis?.result?.declared
+                ? `${analysis.result.declared.bpm} BPM, ${analysis.result.declared.key} from OG.`
+                : "Not recorded."}
+            </p>
+            <p className="muted">User corrections: Not recorded.</p>
+          </section>
           <section className="inspector-section">
             <h3>Prepared</h3>
-            <p className="muted">No prepared audio.</p>
+            <p className="muted">
+              {analysis?.status === "ready"
+                ? "Uses unchanged source audio."
+                : "No ready audio."}
+            </p>
+          </section>
+          <section className="inspector-section" aria-label="Split stereo pair">
+            <h3>Split stereo pair</h3>
+            <p className="muted">
+              Select two mono files. Assign their left and right channels.
+            </p>
+            <div className="pair-select-row">
+              <Button
+                className="tracker-button"
+                disabled={state.metadata?.channels !== 1}
+                aria-pressed={state.pairDraft.leftPath === sample.path}
+                onClick={() => controller.setPairSide("left", sample.path)}
+                tip="Use this mono file as the left source channel."
+              >
+                Use as left
+              </Button>
+              <Button
+                className="tracker-button"
+                disabled={state.metadata?.channels !== 1}
+                aria-pressed={state.pairDraft.rightPath === sample.path}
+                onClick={() => controller.setPairSide("right", sample.path)}
+                tip="Use this mono file as the right source channel."
+              >
+                Use as right
+              </Button>
+            </div>
+            <dl className="sample-metadata pair-paths">
+              <dt>Left</dt>
+              <dd>{state.pairDraft.leftPath ?? "Not selected"}</dd>
+              <dt>Right</dt>
+              <dd>{state.pairDraft.rightPath ?? "Not selected"}</dd>
+            </dl>
+            <div className="pair-select-row">
+              <Button
+                className="tracker-button"
+                disabled={
+                  !state.pairDraft.leftPath ||
+                  !state.pairDraft.rightPath ||
+                  state.pair?.status === "checking"
+                }
+                onClick={() => void controller.checkPair()}
+                tip="Confirm these files share a source. Check channel alignment and musical compatibility."
+              >
+                Confirm and check pair
+              </Button>
+              <Button
+                className="tracker-button"
+                disabled={
+                  !state.pairDraft.leftPath && !state.pairDraft.rightPath
+                }
+                onClick={() => controller.clearPair()}
+              >
+                Clear pair
+              </Button>
+            </div>
+            <p
+              className="pair-status"
+              data-status={state.pair?.status}
+              role="status"
+            >
+              {state.pair?.status === "ready"
+                ? "Pair ready. Both channels passed analysis."
+                : (state.pair?.message ?? "No pair check is recorded.")}
+            </p>
           </section>
           <section className="inspector-section">
             <h3>Tags</h3>

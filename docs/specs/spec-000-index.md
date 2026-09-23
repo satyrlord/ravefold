@@ -1,6 +1,6 @@
 # RaveFold product slices
 
-Status: Specs 001, 002 and 013 are implemented. The user accepted specs 001
+Status: Specs 001, 002, 003 and 013 are implemented. The user accepted specs 001
 and 013. Other specifications stay drafts. Browser support and tests are limited
 to Chromium.
 
@@ -13,8 +13,9 @@ acceptance checks. Proposed behavior does not have new product approval.
 
 The increase in spec-001 menu scope has user approval. Its interview is
 completed. The user also requested spec-013 archive import. On 2026-09-23, the
-user authorized spec-002 implementation after a full tracker mockup request.
-Other slices do not have implementation approval.
+user authorized spec-002 implementation after a full tracker mockup request. The
+user also authorized spec-003 implementation. Other slices do not have
+implementation approval.
 
 ## Terms
 
@@ -41,7 +42,7 @@ of each slice through its user flow. Also do tests of its logic independently.
 | --------------------------------------- | ------------------------------------------------------ | ---------------------------------- | ------------------------- |
 | [001](spec-001-select-folders.md)       | Use the full main menu and enter the tracker           | M0 entry contracts, M1 UI evidence | Completed                 |
 | [002](spec-002-find-a-sample.md)        | Find, tag and audition a source sample                 | 001                                | Implementation authorized |
-| [003](spec-003-use-compatible-audio.md) | Make compatible audio ready for arrangement            | 002, M1 analysis evidence          | No approval               |
+| [003](spec-003-use-compatible-audio.md) | Make compatible audio ready for arrangement            | 002                                | Implementation authorized |
 | [004](spec-004-prepare-a-sample.md)     | Prepare a sample at the supported tempo and key        | 003, M1 conversion evidence        | No approval               |
 | [005](spec-005-review-a-sample.md)      | Resolve an uncertain sample or select a usable section | 003, 004                           | No approval               |
 | [006](spec-006-arrange-and-play.md)     | Place ready clips and play a short arrangement         | 003, M1 playback evidence          | No approval               |
@@ -66,6 +67,8 @@ on subsequent components that write projects.
 
 - Keep the product at 180 BPM and C minor. Apply all sample classes with user
   approval.
+- Analyze each source before `ready`. Record official collection declarations
+  separately from measured results. A declaration alone cannot give `ready`.
 - Accept WAV samples only. Export supports WAV and MP3. MP3 is not a sample
   format.
 - Bundle no samples or demo songs. OG project import is excluded permanently.
@@ -97,11 +100,11 @@ on subsequent components that write projects.
 Acceptance IDs use the form `S001-AC01`. Keep each ID with the slice that gives
 it. Record completed evidence and remaining limits with the owning slice.
 
-M0 gives the corpus and acceptance criteria for approval by the product owner.
-M1 supplies measurements before implementation of the full workspace. The
-specification division does not bypass either stage. Recorded evidence and
-decisions are necessary for browser versions, capacity, detector confidence and
-processing tools.
+M0 supplies entry and project-read contracts. M1 supplies measurements for
+technical choices. Spec-003 has no M0 corpus approval gate. The specification
+division does not bypass the analysis required for each source. Record evidence
+before you select browser versions, capacity, detector confidence and processing
+tools.
 
 Use generated signals or material with distribution permission in public tests.
 Keep private source fixtures out of the application and public test assets.
@@ -132,7 +135,7 @@ do not prove browser or audio behavior.
 | Six skins, effects levels and saved appearance         | 001                    |
 | Project-read contract and pre-entry recovery selection | 001, M0                |
 | Tracker appearance and playback continuity             | 012                    |
-| Corpus, numerical criteria and tool feasibility        | M0 and M1 in the plan  |
+| Source analysis, corpus results and tool feasibility   | 003 and M1 in the plan |
 | Combined load, production hosting and release evidence | M5 in the plan         |
 
 Each subsequent specification gives its open choices. These are records for a

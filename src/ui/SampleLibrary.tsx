@@ -156,7 +156,28 @@ export function SampleLibrary({
                     </button>
                   </td>
                   <td>
-                    <span className="preparation-state">Not prepared</span>
+                    <span
+                      className="preparation-state"
+                      data-status={
+                        state.analysis?.path === sample.path
+                          ? state.analysis.status
+                          : undefined
+                      }
+                    >
+                      {state.analysis?.path !== sample.path
+                        ? "Not checked"
+                        : state.analysis.status === "ready"
+                          ? "Ready"
+                          : state.analysis.status === "needs-conversion"
+                            ? "Needs conversion"
+                            : state.analysis.status === "needs-review"
+                              ? "Needs review"
+                              : state.analysis.status === "unusable"
+                                ? "Unusable"
+                                : state.analysis.status === "error"
+                                  ? "Analysis unavailable"
+                                  : "Analyzing"}
+                    </span>
                   </td>
                 </tr>
               ))}
