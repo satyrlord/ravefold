@@ -8,7 +8,7 @@ if (!element) throw new Error("The application root is missing.");
 createRoot(element).render(
   <Menu
     onEntry={(entry) => {
-      // The tracker slice consumes this checked result through the Menu callback.
+      // Host integrations receive the validated project entry.
       window.dispatchEvent(
         new CustomEvent("ravefold:entry", { detail: entry }),
       );

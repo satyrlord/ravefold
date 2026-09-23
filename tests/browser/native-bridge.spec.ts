@@ -12,6 +12,7 @@ import { resolve, join, dirname, basename } from "node:path";
 import { extensionHarness } from "../extension-harness.ts";
 import { projectFixture } from "../fixtures.ts";
 import type { EntryResult } from "../../src/domain/entry.ts";
+import { TAGS_FILENAME } from "../../src/domain/library-tags.ts";
 
 test("the built native view imports the ISO members into an empty Samples folder", async ({
   page,
@@ -234,7 +235,7 @@ test("the built native extension supports folder setup, reload, entry and revoca
       .getByRole("button", { name: "Enter tracker", exact: true })
       .click();
     await expect(
-      page.getByRole("heading", { name: "Project ready", exact: true }),
+      page.getByRole("heading", { name: "Samples", exact: true }),
     ).toBeVisible();
     const entries = await page.evaluate(
       () =>
@@ -253,7 +254,45 @@ test("the built native extension supports folder setup, reload, entry and revoca
     expect(hash(await readFile(join(samples, "drums", "kick.wav")))).toBe(
       initialHash,
     );
-    expect(await readdir(samples)).toEqual(["drums"]);
+    await page
+      .getByRole("button", { name: "drums/kick.wav", exact: true })
+      .click();
+    const inspector = page.getByRole("region", {
+      name: "Sample inspector",
+      exact: true,
+    });
+    await inspector
+      .getByRole("textbox", { name: "New tag", exact: true })
+      .fill("native drum");
+    await inspector
+      .getByRole("button", { name: "Add tag", exact: true })
+      .click();
+    await inspector
+      .getByRole("button", { name: "Save tags", exact: true })
+      .click();
+    await expect(
+      inspector.getByText("Tags saved.", { exact: true }),
+    ).toBeVisible();
+    const tags = JSON.parse(
+      await readFile(join(samples, TAGS_FILENAME), "utf8"),
+    );
+    expect(tags.samples["drums/kick.wav"].tags).toEqual(["native drum"]);
+    expect((await readdir(samples)).sort()).toEqual(
+      [TAGS_FILENAME, "drums"].sort(),
+    );
+    await page.reload();
+    await page
+      .getByRole("button", { name: "New project", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Enter tracker", exact: true })
+      .click();
+    await page
+      .getByRole("combobox", { name: "Tag filter", exact: true })
+      .selectOption({ label: "native drum" });
+    await expect(
+      page.getByRole("button", { name: "drums/kick.wav", exact: true }),
+    ).toBeVisible();
     expect(await readdir(settings)).toEqual(["ravefold-settings.json"]);
     expect([...host.saved.keys()]).toEqual(["ravefold.folderReferences.v1"]);
     expect(
@@ -263,6 +302,18 @@ test("the built native extension supports folder setup, reload, entry and revoca
         databases: (await indexedDB.databases()).length,
       })),
     ).toEqual({ local: 0, session: 0, databases: 0 });
+    await page
+      .getByRole("button", { name: "drums/kick.wav", exact: true })
+      .click();
+    await inspector
+      .getByRole("textbox", { name: "New tag", exact: true })
+      .fill("retained draft");
+    await inspector
+      .getByRole("button", { name: "Add tag", exact: true })
+      .click();
+    await expect(
+      inspector.getByText("Tags not saved.", { exact: true }),
+    ).toBeVisible();
     host.messages((message) => {
       void page.evaluate(
         (data) => window.dispatchEvent(new MessageEvent("message", { data })),
@@ -270,10 +321,59 @@ test("the built native extension supports folder setup, reload, entry and revoca
       );
     });
     await host.command("ravefold.forgetFolders");
+    const revoked = page.getByRole("dialog", {
+      name: "Folder settings",
+      exact: true,
+    });
+    await expect(revoked).toBeVisible();
+    await revoked.getByRole("button", { name: "Done", exact: true }).click();
     await expect(
       page.getByRole("button", { name: "Enter tracker", exact: true }),
     ).toBeDisabled();
     expect(host.saved.size).toBe(0);
+    host.pickerPaths.push(samples, settings);
+    await page
+      .getByRole("button", { name: "Folder settings", exact: true })
+      .click();
+    await revoked
+      .getByRole("button", { name: "Select sample folder", exact: true })
+      .click();
+    await expect(
+      revoked.getByText("Sample folder is ready.", { exact: true }),
+    ).toBeVisible();
+    await revoked
+      .getByRole("button", { name: "Select settings folder", exact: true })
+      .click();
+    await expect(
+      revoked.getByText("Settings folder is ready.", { exact: true }),
+    ).toBeVisible();
+    await revoked.getByRole("button", { name: "Done", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Enter tracker", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "drums/kick.wav", exact: true })
+      .click();
+    await expect(
+      inspector.getByRole("button", {
+        name: "Remove tag: retained draft",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      inspector.getByText("Tags not saved.", { exact: true }),
+    ).toBeVisible();
+    await inspector
+      .getByRole("button", { name: "Save tags", exact: true })
+      .click();
+    await expect(
+      inspector.getByText("Tags saved.", { exact: true }),
+    ).toBeVisible();
+    expect(
+      JSON.parse(await readFile(join(samples, TAGS_FILENAME), "utf8")).samples[
+        "drums/kick.wav"
+      ].tags,
+    ).toEqual(["native drum", "retained draft"]);
     expect(hash(await readFile(join(samples, "drums", "kick.wav")))).toBe(
       initialHash,
     );

@@ -33,12 +33,43 @@ typography:
   label:
     fontFamily: '"Space Grotesk Variable", sans-serif'
     fontSize: "14px"
+  tracker-wordmark:
+    fontFamily: '"Space Grotesk Variable", sans-serif'
+    fontSize: "22px"
+    fontWeight: 600
+  position:
+    fontFamily: '"Space Grotesk Variable", sans-serif'
+    fontSize: "19px"
+  panel-heading:
+    fontFamily: '"Space Grotesk Variable", sans-serif'
+    fontSize: "16px"
+  project-name:
+    fontFamily: '"Space Grotesk Variable", sans-serif'
+    fontSize: "15px"
+  sample-name:
+    fontFamily: '"Space Grotesk Variable", sans-serif'
+    fontSize: "12px"
+  caption:
+    fontFamily: '"Space Grotesk Variable", sans-serif'
+    fontSize: "11px"
+  metadata:
+    fontFamily: '"Space Grotesk Variable", sans-serif'
+    fontSize: "10px"
+  track-state:
+    fontFamily: '"Space Grotesk Variable", sans-serif'
+    fontSize: "9px"
 rounded:
   field: "8px"
   button: "9px"
   project-action: "12px"
   dialog: "16px"
   panel: "26px"
+  tracker-button: "7px"
+  tracker-field: "6px"
+  clip: "5px"
+  sample-row: "4px"
+  track-state: "3px"
+  meter: "2px"
 spacing:
   control-gap: "12px"
   field-gap: "16px"
@@ -178,7 +209,31 @@ receives focus again. Full effects use the reference settings. Reduced effects
 decrease motion but can still animate. Static effects disable animation and
 transitions.
 
-## Interface rules
+## Tracker workspace
+
+The tracker extends the menu's skin registry and supplied typeface. Its header,
+transport, sample browser, arrangement, inspector and mixer retain fixed roles.
+The arrangement receives the remaining width between the browser and inspector.
+
+The desktop shell has 14px outer space and 10px panel gaps. The sample browser
+uses 310px. The inspector uses 280px. Panel headings use 16px type. Controls and
+data use 13px type or smaller labels. Timing and source values use tabular
+numerals. The primary source action uses the existing `on` colors.
+
+Rows and source metadata use the `plate` background for contrast. Selection uses
+an outline and a state label. Missing clips use danger colors and names. Meters
+remain inactive until arrangement playback is available. Source preview has its
+own state and stop control.
+
+The inspector closes at 1280px and can reopen above the arrangement. At 760px,
+Samples, Arrangement and Mixer use separate selectable views. The inspector then
+follows the selected view. Scroll regions contain long lists and timelines.
+
+[Tracker styles](src/ui/tracker.css) contain the layout measurements.
+[Tracker components](src/ui/Tracker.tsx) connect the shared material renderer to
+the sample controls. The image proposal remains a composition reference.
+
+## Shared interface rules
 
 - Use the six registry definitions and shared theme properties.
 - Keep labels, focus and status clear in each skin.

@@ -553,15 +553,6 @@ option {
 .recovery-choice span {
   overflow-wrap: anywhere;
 }
-.handoff {
-  padding: 28px;
-}
-.handoff p {
-  margin-top: 12px;
-}
-.handoff button {
-  margin-top: 22px;
-}
 @media (max-width: 860px) {
   .app-shell {
     padding: 24px;

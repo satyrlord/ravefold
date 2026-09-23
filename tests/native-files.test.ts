@@ -6,6 +6,12 @@ import * as path from "node:path";
 import { test } from "node:test";
 import { MAX_WRITE_BYTES } from "../shared/native-protocol.ts";
 import {
+  TAGS_FILENAME,
+  TAGS_LOCK_FILENAME,
+  validateTagManifest,
+} from "../src/domain/library-tags.ts";
+import { tagReservationName } from "../src/domain/tag-reservation.ts";
+import {
   NativeFiles,
   type NativeHandle,
 } from "../extensions/ravefold/src/native-files.ts";
@@ -453,6 +459,34 @@ test("native range reads complete after short file reads", async (t) => {
   });
 });
 
+test("native enumeration skips a reservation removed after its directory entry was read", async (t) => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const name = tagReservationName(randomUUID());
+    await fs.writeFile(path.join(samples, name), "temporary");
+    await fs.writeFile(path.join(samples, "sample.wav"), wav());
+    const opened = await fs.opendir(samples);
+    type Read = (
+      this: typeof opened,
+    ) => Promise<import("node:fs").Dirent | null>;
+    const prototype = Object.getPrototypeOf(opened) as { read: Read };
+    const original = prototype.read;
+    await opened.close();
+    t.mock.method(prototype, "read", async function (this: typeof opened) {
+      const entry = await original.call(this);
+      if (entry?.name === name) await fs.unlink(path.join(samples, name));
+      return entry;
+    });
+    const result = (await native.dispatch({
+      op: "list",
+      handle: sampleHandle.id,
+    })) as { entries: NativeHandle[] };
+    assert.deepEqual(
+      result.entries.map((entry) => entry.name),
+      ["sample.wav"],
+    );
+  });
+});
+
 test("native descendants resolve within their selected root", async () => {
   await fixture(async ({ native, samples, sampleHandle, settingsHandle }) => {
     await fs.mkdir(path.join(samples, "drums"));
@@ -812,6 +846,439 @@ test("native settings writes validate both old and new content", async () => {
     );
     assert.deepEqual(await fs.readdir(folder), ["ravefold-settings.json"]);
   });
+});
+
+test("native tags accept only the sample-root manifest and preserve audio hashes", async () => {
+  await fixture(async ({ native, samples, sampleHandle, settingsHandle }) => {
+    const audio = path.join(samples, "hit.wav");
+    const source = wav();
+    await fs.writeFile(audio, source);
+    const before = createHash("sha256").update(source).digest("hex");
+    const tags = JSON.stringify({
+      schemaVersion: 1,
+      revision: 1,
+      samples: { "hit.wav": { tags: ["Heavy"] } },
+    });
+    const handle = await file(native, sampleHandle, TAGS_FILENAME, true);
+    await write(native, handle, tags);
+    assert.deepEqual(
+      validateTagManifest(
+        JSON.parse(
+          await fs.readFile(path.join(samples, TAGS_FILENAME), "utf8"),
+        ),
+      ).samples,
+      { "hit.wav": { tags: ["Heavy"] } },
+    );
+    assert.equal(
+      createHash("sha256")
+        .update(await fs.readFile(audio))
+        .digest("hex"),
+      before,
+    );
+    await assert.rejects(file(native, settingsHandle, TAGS_FILENAME, true), {
+      name: "NotAllowedError",
+    });
+    await fs.mkdir(path.join(samples, "nested"));
+    const nested = (await native.dispatch({
+      op: "getDirectory",
+      handle: sampleHandle.id,
+      name: "nested",
+    })) as NativeHandle;
+    await assert.rejects(file(native, nested, TAGS_FILENAME, true), {
+      name: "NotAllowedError",
+    });
+    await assert.rejects(
+      file(native, sampleHandle, "other.manifest.json", true),
+      { name: "NotAllowedError" },
+    );
+    const writer = await open(native, handle);
+    await assert.rejects(
+      native.dispatch({
+        op: "write",
+        writer,
+        data: JSON.stringify({
+          schemaVersion: 1,
+          revision: 2,
+          samples: { "hit.wav": { tags: ["Changed"], audio: [1] } },
+        }),
+      }),
+    );
+    await native.dispatch({ op: "abortWriter", writer });
+    assert.equal(
+      await fs.readFile(path.join(samples, TAGS_FILENAME), "utf8"),
+      tags,
+    );
+    await fs.writeFile(path.join(samples, TAGS_FILENAME), source);
+    await assert.rejects(open(native, handle));
+    assert.deepEqual(
+      await fs.readFile(path.join(samples, TAGS_FILENAME)),
+      source,
+    );
+  });
+});
+
+test("native tags keep previous records after concurrent, interrupted and external writes", async () => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const target = path.join(samples, TAGS_FILENAME);
+    const tags = JSON.stringify({
+      schemaVersion: 1,
+      revision: 1,
+      samples: { "hit.wav": { tags: ["Saved"] } },
+    });
+    const handle = await file(native, sampleHandle, TAGS_FILENAME, true);
+    await write(native, handle, tags);
+    const writer = await open(native, handle);
+    await assert.rejects(open(native, handle), { name: "InvalidStateError" });
+    await native.dispatch({
+      op: "write",
+      writer,
+      data: tags.replace("Saved", "Unsaved"),
+    });
+    await native.dispatch({ op: "abortWriter", writer });
+    assert.equal(await fs.readFile(target, "utf8"), tags);
+    const second = await open(native, handle);
+    await native.dispatch({
+      op: "write",
+      writer: second,
+      data: tags.replace("Saved", "Unsaved"),
+    });
+    const external = tags.replace("Saved", "External");
+    await fs.writeFile(target, external);
+    await assert.rejects(
+      native.dispatch({ op: "closeWriter", writer: second }),
+      { name: "InvalidModificationError" },
+    );
+    assert.equal(await fs.readFile(target, "utf8"), external);
+    assert.deepEqual(await fs.readdir(samples), [TAGS_FILENAME]);
+  });
+});
+
+test("two native hosts cannot hold the same tag write reservation", async () => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const other = new NativeFiles();
+    try {
+      const tags = JSON.stringify({
+        schemaVersion: 1,
+        revision: 1,
+        samples: { "hit.wav": { tags: ["Saved"] } },
+      });
+      const handle = await file(native, sampleHandle, TAGS_FILENAME, true);
+      await write(native, handle, tags);
+      const otherRoot = await other.selectRoot("samples", samples);
+      const otherHandle = await file(other, otherRoot, TAGS_FILENAME);
+      const attempts = await Promise.allSettled([
+        open(native, handle),
+        open(other, otherHandle),
+      ]);
+      assert.equal(
+        attempts.filter((result) => result.status === "fulfilled").length,
+        1,
+      );
+      const rejected = attempts.find((result) => result.status === "rejected");
+      assert.equal(
+        (rejected as PromiseRejectedResult).reason.name,
+        "NoModificationAllowedError",
+      );
+      const firstWon = attempts[0]!.status === "fulfilled";
+      const winner = firstWon ? native : other;
+      const loser = firstWon ? other : native;
+      const winnerHandle = firstWon ? handle : otherHandle;
+      const loserHandle = firstWon ? otherHandle : handle;
+      const writer = (
+        attempts[firstWon ? 0 : 1] as PromiseFulfilledResult<string>
+      ).value;
+      await winner.dispatch({
+        op: "write",
+        writer,
+        data: tags.replace("Saved", "First"),
+      });
+      await assert.rejects(open(loser, loserHandle), {
+        name: "NoModificationAllowedError",
+      });
+      assert.equal(
+        await fs.readFile(path.join(samples, TAGS_FILENAME), "utf8"),
+        tags,
+      );
+      await winner.dispatch({ op: "closeWriter", writer });
+      assert.equal(
+        await fs.readFile(path.join(samples, TAGS_FILENAME), "utf8"),
+        tags.replace("Saved", "First"),
+      );
+      assert.equal(
+        (await fs.readdir(samples)).includes(TAGS_LOCK_FILENAME),
+        false,
+      );
+      const second = await open(loser, loserHandle);
+      await loser.dispatch({
+        op: "write",
+        writer: second,
+        data: tags.replace("Saved", "Second"),
+      });
+      await loser.dispatch({ op: "abortWriter", writer: second });
+      assert.equal(
+        await fs.readFile(path.join(samples, TAGS_FILENAME), "utf8"),
+        tags.replace("Saved", "First"),
+      );
+      const last = await open(winner, winnerHandle);
+      await winner.dispatch({
+        op: "write",
+        writer: last,
+        data: tags.replace("Saved", "Last"),
+      });
+      await winner.dispose();
+      assert.equal(
+        (await fs.readdir(samples)).includes(TAGS_LOCK_FILENAME),
+        false,
+      );
+      await write(loser, loserHandle, tags.replace("Saved", "Final"));
+      assert.equal(
+        await fs.readFile(path.join(samples, TAGS_FILENAME), "utf8"),
+        tags.replace("Saved", "Final"),
+      );
+    } finally {
+      await other.dispose();
+    }
+  });
+});
+
+test("native tags preserve an abandoned reservation instead of stealing it", async () => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const marker = JSON.stringify({
+      schemaVersion: 1,
+      kind: "ravefold-tag-write-lock",
+      owner: "abandoned-session",
+    });
+    await fs.writeFile(path.join(samples, TAGS_LOCK_FILENAME), marker);
+    const handle = await file(native, sampleHandle, TAGS_FILENAME, true);
+    await assert.rejects(open(native, handle), {
+      name: "NoModificationAllowedError",
+    });
+    assert.equal(
+      await fs.readFile(path.join(samples, TAGS_LOCK_FILENAME), "utf8"),
+      marker,
+    );
+    assert.deepEqual(await fs.readdir(samples), [TAGS_LOCK_FILENAME]);
+  });
+});
+
+test("native shared registers enforce owner, schema and session-only removal", async () => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const owner = randomUUID();
+    const name = tagReservationName(owner);
+    const handle = await file(native, sampleHandle, name, true);
+    const choosing = JSON.stringify({
+      schemaVersion: 1,
+      owner,
+      choosing: true,
+      ticket: 0,
+    });
+    await write(native, handle, choosing);
+    const other = new NativeFiles();
+    try {
+      const root = await other.selectRoot("samples", samples);
+      const foreign = await file(other, root, name);
+      await assert.rejects(open(other, foreign), { name: "NotAllowedError" });
+      await assert.rejects(
+        other.dispatch({ op: "remove", handle: root.id, name }),
+        { name: "NotAllowedError" },
+      );
+      const writer = await open(native, handle);
+      await assert.rejects(
+        native.dispatch({
+          op: "write",
+          writer,
+          data: choosing.replace(owner, randomUUID()),
+        }),
+      );
+      await native.dispatch({ op: "abortWriter", writer });
+      assert.equal(
+        await fs.readFile(path.join(samples, name), "utf8"),
+        choosing,
+      );
+      const selected = JSON.stringify({
+        schemaVersion: 1,
+        owner,
+        choosing: false,
+        ticket: 1,
+      });
+      await write(native, handle, selected);
+      await native.dispatch({ op: "remove", handle: sampleHandle.id, name });
+      assert.deepEqual(await fs.readdir(samples), []);
+      await fs.writeFile(path.join(samples, name), selected);
+      const unowned = await file(native, sampleHandle, name);
+      await assert.rejects(open(native, unowned), { name: "NotAllowedError" });
+      await assert.rejects(
+        native.dispatch({ op: "remove", handle: sampleHandle.id, name }),
+        { name: "NotAllowedError" },
+      );
+      assert.equal(
+        await fs.readFile(path.join(samples, name), "utf8"),
+        selected,
+      );
+    } finally {
+      await other.dispose();
+    }
+  });
+});
+
+test("native root reselection compares retained identity without restoring revoked access", async () => {
+  await fixture(async ({ native, root, samples, sampleHandle }) => {
+    const alternate = path.join(root, "other-samples");
+    await fs.mkdir(alternate);
+    const different = await native.selectRoot("samples", alternate);
+    await assert.rejects(
+      native.dispatch({ op: "list", handle: sampleHandle.id }),
+      { name: "NotAllowedError" },
+    );
+    assert.equal(
+      await native.dispatch({
+        op: "same",
+        handle: sampleHandle.id,
+        other: different.id,
+      }),
+      false,
+    );
+    const restored = await native.selectRoot("samples", samples);
+    assert.equal(
+      await native.dispatch({
+        op: "same",
+        handle: sampleHandle.id,
+        other: restored.id,
+      }),
+      true,
+    );
+    assert.equal(
+      await native.dispatch({
+        op: "same",
+        handle: restored.id,
+        other: sampleHandle.id,
+      }),
+      true,
+    );
+    await assert.rejects(
+      native.dispatch({
+        op: "getFile",
+        handle: sampleHandle.id,
+        name: TAGS_FILENAME,
+        create: true,
+      }),
+      { name: "NotAllowedError" },
+    );
+    await native.dispose();
+    await assert.rejects(
+      native.dispatch({
+        op: "same",
+        handle: sampleHandle.id,
+        other: restored.id,
+      }),
+      { name: "AbortError" },
+    );
+    const later = new NativeFiles();
+    try {
+      const next = await later.selectRoot("samples", samples);
+      await assert.rejects(
+        later.dispatch({ op: "same", handle: sampleHandle.id, other: next.id }),
+        { name: "NotAllowedError" },
+      );
+    } finally {
+      await later.dispose();
+    }
+  });
+});
+
+test("native reselection and disposal clean only unchanged session-owned shared registers", async () => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const owner = randomUUID();
+    const name = tagReservationName(owner);
+    const handle = await file(native, sampleHandle, name, true);
+    const record = JSON.stringify({
+      schemaVersion: 1,
+      owner,
+      choosing: false,
+      ticket: 1,
+    });
+    await write(native, handle, record);
+    const foreignOwner = randomUUID();
+    const foreignName = tagReservationName(foreignOwner);
+    const foreign = JSON.stringify({
+      schemaVersion: 1,
+      owner: foreignOwner,
+      choosing: false,
+      ticket: 2,
+    });
+    await fs.writeFile(path.join(samples, foreignName), foreign);
+    const selected = await native.selectRoot("samples", samples);
+    assert.deepEqual(await fs.readdir(samples), [foreignName]);
+    const changed = await file(native, selected, name, true);
+    await write(native, changed, record);
+    await fs.writeFile(
+      path.join(samples, name),
+      record.replace('"ticket":1', '"ticket":3'),
+    );
+    const disposedOwner = randomUUID();
+    const disposedName = tagReservationName(disposedOwner);
+    const disposed = await file(native, selected, disposedName, true);
+    await write(
+      native,
+      disposed,
+      JSON.stringify({
+        schemaVersion: 1,
+        owner: disposedOwner,
+        choosing: true,
+        ticket: 0,
+      }),
+    );
+    await native.dispose();
+    assert.deepEqual(
+      (await fs.readdir(samples)).sort(),
+      [name, foreignName].sort(),
+    );
+    assert.equal(
+      await fs.readFile(path.join(samples, foreignName), "utf8"),
+      foreign,
+    );
+    assert.equal(
+      await fs.readFile(path.join(samples, name), "utf8"),
+      record.replace('"ticket":1', '"ticket":3'),
+    );
+  });
+});
+
+test("native tags reject a changed reservation and preserve unowned replacement files", async () => {
+  for (const replace of [false, true]) {
+    await fixture(async ({ native, samples, sampleHandle }) => {
+      const tags = JSON.stringify({
+        schemaVersion: 1,
+        revision: 1,
+        samples: { "hit.wav": { tags: ["Saved"] } },
+      });
+      const handle = await file(native, sampleHandle, TAGS_FILENAME, true);
+      await write(native, handle, tags);
+      const writer = await open(native, handle);
+      await native.dispatch({
+        op: "write",
+        writer,
+        data: tags.replace("Saved", "Unsaved"),
+      });
+      const lockPath = path.join(samples, TAGS_LOCK_FILENAME);
+      const marker = await fs.readFile(lockPath, "utf8");
+      if (replace)
+        await fs.rename(
+          lockPath,
+          path.join(samples, "prior-lock.manifest.json"),
+        );
+      const replacement = replace ? marker : "changed owner";
+      await fs.writeFile(lockPath, replacement);
+      await assert.rejects(native.dispatch({ op: "closeWriter", writer }), {
+        name: "InvalidModificationError",
+      });
+      assert.equal(await fs.readFile(lockPath, "utf8"), replacement);
+      assert.equal(
+        await fs.readFile(path.join(samples, TAGS_FILENAME), "utf8"),
+        tags,
+      );
+    });
+  }
 });
 
 test("native settings preserve external changes and reject concurrent writers", async () => {

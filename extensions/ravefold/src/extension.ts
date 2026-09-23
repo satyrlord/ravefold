@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, isAbsolute } from "node:path";
 import { NativeFiles } from "./native-files.ts";
+import { TAG_RESERVATION_BUSY_MESSAGE } from "../../../src/domain/tag-reservation.ts";
 import {
   NATIVE_CHANNEL,
   NATIVE_VERSION,
@@ -53,6 +54,7 @@ function safeError(error: unknown): { name: string; message: string } {
     TypeMismatchError: "The file or folder type is not valid.",
     InvalidModificationError:
       "The file cannot be changed. Check its contents and try again.",
+    NoModificationAllowedError: TAG_RESERVATION_BUSY_MESSAGE,
     InvalidStateError:
       "The operation is no longer available. Retry the folder check.",
     QuotaExceededError: "The operation exceeds the current file limit.",
@@ -282,8 +284,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("ravefold.forgetFolders", async () => {
       generation++;
       await enqueue(async () => {
-        await files.dispose();
-        files = new NativeFiles();
+        await files.revokeAll();
         await context.globalState.update(referenceKey, undefined);
       });
       await panel?.webview.postMessage({

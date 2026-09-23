@@ -322,11 +322,11 @@ browser version range still need acceptance evidence. Compact viewport checks
 test the layout size at 200% zoom. They do not operate the browser zoom control.
 Hardware performance and combined audio work remain M1 tasks.
 
-Chromium checks include Full, Reduced and Static effects. The limited checks in
-another browser engine cover Static and Full settings without application
-errors. They do not establish full material support in that engine. Early
-headless runs had long initial shader startup and input delays. Real hardware
-startup performance still needs a check.
+Chromium checks include Full, Reduced and Static effects. On 2026-09-23, the
+user excluded other browser engines from support and tests. Earlier checks in
+another engine are historical evidence only. Early headless runs had long
+initial shader startup and input delays. Real hardware startup performance still
+needs a check.
 
 Application dialogs use native modal focus and themed CSS surfaces. They share
 the selected colors and controls. They do not start another material renderer.

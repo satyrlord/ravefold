@@ -194,14 +194,22 @@ export class MenuController {
     this.listeners.clear();
   }
 
+  private async accessibleOther(kind: FolderKind) {
+    const handle =
+      this.state[kind === "samples" ? "settings" : "samples"].handle;
+    if (!handle) return undefined;
+    return (await permission(handle).catch(() => "denied")) === "granted"
+      ? handle
+      : undefined;
+  }
+
   async selectFolder(kind: FolderKind) {
     if (kind === "samples") this.cancelArchive();
     const sequence = ++this.selections[kind];
     try {
       const handle = await pickFolder(kind);
       if (sequence !== this.selections[kind] || this.disposed) return;
-      const other =
-        this.state[kind === "samples" ? "settings" : "samples"].handle;
+      const other = await this.accessibleOther(kind);
       const separate = !other || (await checkFolderSeparation(handle, other));
       if (sequence !== this.selections[kind] || this.disposed) return;
       if (!separate) {
@@ -434,7 +442,7 @@ export class MenuController {
     this.update({ entry: undefined, message: "" });
     try {
       const result = await validateFolder(handle, kind, {
-        other: this.state[kind === "samples" ? "settings" : "samples"].handle,
+        other: await this.accessibleOther(kind),
         signal: task.signal,
         onProgress: (discovery) => {
           if (task.signal.aborted) return;

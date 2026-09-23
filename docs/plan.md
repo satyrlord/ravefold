@@ -720,16 +720,14 @@ the quick gate. Keep private OG material out of public CI. Use generated signals
 and samples with distribution permission in public tests. Keep a different local
 test suite for the supplied library.
 
-Official support is for Chromium-based desktop browsers only. Other browsers
-must operate without browser-related application errors. Do not block startup
-only because the browser uses a different engine. Use capability detection
-before optional API calls. Give a controlled fallback or a clear availability
-message when a capability is missing.
+Support and browser tests are limited to Chromium-based desktop browsers. Other
+browser engines are outside the product scope. Use capability detection before
+optional API calls. Give a controlled fallback or a clear availability message
+when a capability is missing in a supported browser.
 
 Select the supported version range from prototype evidence. Record tested
-browser versions in private test evidence. Full support for other browser
-engines is not part of this release. Write this limit in product documentation.
-Mark behavior without test evidence as unverified.
+browser versions in private test evidence. Write this limit in product
+documentation. Mark supported behavior without test evidence as unverified.
 
 Run browser tests only through `npm run quality:full`, and only for UI changes.
 UI changes affect appearance, layout, interaction, accessibility or UI rendering
@@ -739,9 +737,8 @@ changes.
 
 The `quality:full` command must include the quick gate, an application build and
 browser tests on that build. Run the browser tests without windows on the
-screen. Include integration, visual and capability-fallback tests. Any limited
-tests in other browser engines also belong in this gate. They do not expand
-official support.
+screen. Include integration, visual and capability-fallback tests in Chromium.
+Do not add tests for other browser engines.
 
 Do not supply a command that runs browser tests without the full gate. Do not
 claim full verification from an empty gate or a quick-gate alias. Apply this
@@ -866,8 +863,7 @@ These requirements have user approval:
   bubbles.
 - Full first-release editing on desktop and laptop computers with a keyboard and
   pointer. The first release does not include full editing on tablets or phones.
-- Official support for Chromium-based desktop browsers only. Other browsers must
-  operate without browser-related application errors.
+- Support and browser tests for Chromium-based desktop browsers only.
 - Browser tests only through the full quality gate, and only for UI changes.
 - The first-release task: import samples, edit an arrangement, adjust a basic
   mix, save and reopen projects, and export stereo WAV or MP3.
@@ -983,9 +979,14 @@ The user authorized spec-001 implementation. Its file contracts and generated
 fixtures support menu verification without the later audio engine. Its
 specification records completed checks and remaining evidence limits.
 
+The user authorized spec-002 implementation on 2026-09-23 after a tracker mockup
+request. That slice includes sample discovery and the complete tracker view
+design. The workspace shows project values while later arrangement, playback,
+mix and export behavior remains in its respective slices.
+
 The audio corpus and its criteria still need approval before M1 audio acceptance
 tests. Use M1 evidence for deferred selections before the full workspace
-implementation. Spec-001 approval does not approve another slice.
+implementation. Each slice still requires its own authorization.
 
 On 2026-09-23, the user requested one-click OG archive sample import from the
 main menu. [Spec-013](specs/spec-013-import-og-archive.md) records this separate

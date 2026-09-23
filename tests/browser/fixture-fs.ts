@@ -12,6 +12,9 @@ export interface FixtureOptions {
   settings?: string;
   recovery?: Record<string, string>;
   unavailablePersistence?: boolean;
+  library?: boolean;
+  extraSamples?: number;
+  sampleMetadata?: Record<string, string>;
 }
 export interface FixtureSnapshot {
   entries: Array<Omit<EntryResult, "samples" | "settings">>;
@@ -21,6 +24,7 @@ export interface FixtureSnapshot {
   removals: string[];
   settings: string | null;
   recovery: Record<string, string>;
+  sampleMetadata: Record<string, string>;
 }
 export interface FixtureControls {
   queueSample(kind: SampleFixture): void;
@@ -30,6 +34,7 @@ export interface FixtureControls {
     state: "granted" | "denied" | "prompt",
   ): void;
   failSettingsWrite(value: boolean): void;
+  failTagWrite(value: boolean): void;
   releaseSlow(): void;
   blockAudioWrite(): void;
   audioWriteStarted(): boolean;
@@ -41,6 +46,8 @@ export interface FixtureControls {
 declare global {
   interface Window {
     fixtureFS: FixtureControls;
+    fixtureLoadMetadata(): Promise<Record<string, string>>;
+    fixtureSaveMetadata(path: string, contents: string | null): Promise<void>;
   }
 }
 
@@ -49,6 +56,18 @@ export async function installFixtureFS(
   page: Page,
   options: FixtureOptions = {},
 ) {
+  // These files belong to the test host, outside browser storage.
+  const persistedMetadata = new Map<string, string>();
+  await page.exposeBinding("fixtureLoadMetadata", () =>
+    Object.fromEntries(persistedMetadata),
+  );
+  await page.exposeBinding(
+    "fixtureSaveMetadata",
+    (_source, path: string, contents: string | null) => {
+      if (contents === null) persistedMetadata.delete(path);
+      else persistedMetadata.set(path, contents);
+    },
+  );
   await page.addInitScript((configuration) => {
     const writes: FixtureSnapshot["writes"] = [];
     const removals: string[] = [];
@@ -56,6 +75,7 @@ export async function installFixtureFS(
     const selection: SampleFixture[] = [];
     const cancelled = new Set<string>();
     let failSettings = false;
+    let failTags = false;
     let holdAudioWrite = false;
     let audioWriteStarted = false;
     let releaseAudioWrite = () => {};
@@ -71,7 +91,7 @@ export async function installFixtureFS(
       name: string;
       path: string;
       bytes: Uint8Array<ArrayBuffer>;
-      modified = Date.now();
+      modified = 1_700_000_000_000;
       constructor(name: string, path: string, bytes: Uint8Array<ArrayBuffer>) {
         this.name = name;
         this.path = path;
@@ -114,8 +134,20 @@ export async function installFixtureFS(
           close: async () => {
             if (failSettings && this.name === "ravefold-settings.json")
               throw new DOMException("Write denied.", "NotAllowedError");
+            if (
+              failTags &&
+              this.path.startsWith("Sample library/") &&
+              this.name.endsWith(".json") &&
+              !this.name.startsWith(".ravefold-access-")
+            )
+              throw new DOMException("Write denied.", "NotAllowedError");
             this.bytes = pending;
             this.modified = Date.now();
+            if (this.name.endsWith(".json"))
+              await window.fixtureSaveMetadata(
+                this.path,
+                textDecoder.decode(this.bytes),
+              );
           },
           abort: async () => {},
         };
@@ -180,6 +212,7 @@ export async function installFixtureFS(
       async removeEntry(name: string) {
         removals.push(`${this.path}/${name}`);
         this.children.delete(name);
+        await window.fixtureSaveMetadata(`${this.path}/${name}`, null);
       }
       file(name: string, value: string | Uint8Array<ArrayBuffer>) {
         const file = new MemoryFile(
@@ -215,7 +248,36 @@ export async function installFixtureFS(
     view.setInt16(44, 12000, true);
     view.setInt16(46, -12000, true);
     const samples = new MemoryDirectory("Sample library");
-    samples.folder("Drums").file("kick.wav", wav);
+    function signal(frequency: number): Uint8Array<ArrayBuffer> {
+      const frames = 48000 * 8;
+      const bytes = new Uint8Array(44 + frames * 2);
+      bytes.set(wav.subarray(0, 44));
+      const data = new DataView(bytes.buffer);
+      data.setUint32(4, bytes.length - 8, true);
+      data.setUint32(40, frames * 2, true);
+      for (let frame = 0; frame < frames; frame++)
+        data.setInt16(
+          44 + frame * 2,
+          Math.round(
+            Math.sin((frame * frequency * 2 * Math.PI) / 48000) * 4000,
+          ),
+          true,
+        );
+      return bytes;
+    }
+    samples
+      .folder("Drums")
+      .file("kick.wav", configuration.library ? signal(80) : wav);
+    if (configuration.library) {
+      const loops = samples.folder("Loops");
+      loops.file("kick.wav", signal(160));
+      loops.file("acid.wav", signal(320));
+    }
+    if (configuration.extraSamples) {
+      const catalog = samples.folder("Catalog");
+      for (let index = 0; index < configuration.extraSamples; index++)
+        catalog.file(`sample-${String(index).padStart(4, "0")}.wav`, wav);
+    }
     const alternatives: Record<SampleFixture, MemoryDirectory> = {
       valid: samples,
       empty: new MemoryDirectory("Empty samples"),
@@ -235,10 +297,40 @@ export async function installFixtureFS(
       for (const [name, value] of Object.entries(configuration.recovery))
         recovery.file(name, value);
     }
+    function restoreFile(
+      root: MemoryDirectory,
+      path: string,
+      contents: string,
+    ) {
+      const parts = path.split("/");
+      let folder = root;
+      for (const part of parts.slice(0, -1)) {
+        const existing = folder.children.get(part);
+        folder =
+          existing?.kind === "directory" ? existing : folder.folder(part);
+      }
+      folder.file(parts.at(-1)!, contents);
+    }
+    for (const [path, contents] of Object.entries(
+      configuration.sampleMetadata ?? {},
+    ))
+      restoreFile(samples, path, contents);
+    let restored = false;
+    async function restoreMetadata() {
+      if (restored) return;
+      restored = true;
+      for (const [path, contents] of Object.entries(
+        await window.fixtureLoadMetadata(),
+      )) {
+        const root = path.startsWith(`${samples.name}/`) ? samples : settings;
+        restoreFile(root, path.slice(root.name.length + 1), contents);
+      }
+    }
     let selectedSamples = samples;
     Object.defineProperty(window, "showDirectoryPicker", {
       configurable: true,
       value: async ({ id }: { id: string }) => {
+        await restoreMetadata();
         const kind = id === "ravefold-settings" ? "settings" : "samples";
         if (cancelled.delete(kind))
           throw new DOMException("Selection cancelled.", "AbortError");
@@ -295,6 +387,9 @@ export async function installFixtureFS(
       failSettingsWrite: (value) => {
         failSettings = value;
       },
+      failTagWrite: (value) => {
+        failTags = value;
+      },
       releaseSlow,
       blockAudioWrite: () => {
         holdAudioWrite = true;
@@ -341,6 +436,14 @@ export async function installFixtureFS(
           allFiles(settings)
             .filter((file) => file.path.includes("/recovery/"))
             .map((file) => [file.name, textDecoder.decode(file.bytes)]),
+        ),
+        sampleMetadata: Object.fromEntries(
+          allFiles(samples)
+            .filter((file) => file.name.endsWith(".json"))
+            .map((file) => [
+              file.path.slice(samples.name.length + 1),
+              textDecoder.decode(file.bytes),
+            ]),
         ),
       }),
     };

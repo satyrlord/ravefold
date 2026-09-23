@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import maskLogoUrl from "../assets/ravefold-mask.svg?url";
 import type { EntryResult } from "../domain/entry.ts";
 import type { Appearance, Effects, ThemeMode } from "../domain/settings.ts";
-import type { FolderKind } from "../storage/handles.ts";
+import type { DirectoryHandle, FolderKind } from "../storage/handles.ts";
+import { LibraryController } from "../library/controller.ts";
 import { MaterialRoot, MaterialSurface } from "../skins/MaterialRoot.tsx";
 import type { RendererState } from "../skins/MaterialRoot.tsx";
 import { SKINS } from "../skins/registry.ts";
@@ -10,6 +11,7 @@ import { MenuController } from "./menu-controller.ts";
 import { archiveBusy } from "./menu-controller.ts";
 import type { FolderState } from "./menu-controller.ts";
 import { Button, Icon, Modal } from "./controls.tsx";
+import { Tracker } from "./Tracker.tsx";
 import "./menu.css";
 
 export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
@@ -28,6 +30,74 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
   const [recovery, setRecovery] = useState<number>(0);
   const [renderer, setRenderer] = useState<RendererState>("static");
   const projectInput = useRef<HTMLInputElement>(null);
+  const hadEntry = useRef(false);
+  const libraries = useRef<
+    Array<{ root: DirectoryHandle; library: LibraryController }>
+  >([]);
+  const [activeLibrary, setActiveLibrary] = useState<{
+    entry: EntryResult;
+    library: LibraryController;
+  }>();
+  useEffect(() => {
+    const entry = state.entry;
+    if (!entry) return;
+    let cancelled = false;
+    void (async () => {
+      let library: LibraryController | undefined;
+      for (const session of libraries.current) {
+        if (
+          session.root === entry.samples ||
+          (await session.root.isSameEntry(entry.samples).catch(() => false))
+        ) {
+          library = session.library;
+          break;
+        }
+      }
+      if (cancelled) return;
+      if (!library) {
+        library = new LibraryController(entry.samples);
+        libraries.current.push({ root: entry.samples, library });
+      } else {
+        library.resume(entry.samples);
+        const session = libraries.current.find(
+          (item) => item.library === library,
+        );
+        if (session) session.root = entry.samples;
+      }
+      setActiveLibrary({ entry, library });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [state.entry]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => {
+      if (
+        libraries.current.some(
+          ({ library }) => Object.keys(library.getSnapshot().drafts).length,
+        )
+      ) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => {
+      window.removeEventListener("beforeunload", warn);
+      libraries.current.forEach(({ library }) => library.dispose());
+    };
+  }, []);
+  useEffect(() => {
+    if (
+      hadEntry.current &&
+      !state.entry &&
+      (state.samples.status !== "ready" || state.settings.status !== "ready")
+    ) {
+      activeLibrary?.library.suspend();
+      setModal("folders");
+    }
+    hadEntry.current = Boolean(state.entry);
+  }, [state.entry, state.samples.status, state.settings.status]);
   useEffect(() => {
     void controller.start();
     const refresh = () => {
@@ -56,6 +126,25 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
   ) => controller.setAppearance(field, value);
   const closeModal = () => setModal(null);
 
+  if (state.entry && activeLibrary?.entry === state.entry)
+    return (
+      <Tracker
+        entry={state.entry}
+        controller={activeLibrary.library}
+        appearance={state.appearance}
+        settingsMessage={state.settingsMessage}
+        onAppearance={setAppearance}
+        onBack={() => {
+          activeLibrary.library.dispose();
+          libraries.current = libraries.current.filter(
+            ({ library }) => library !== activeLibrary.library,
+          );
+          setActiveLibrary(undefined);
+          controller.returnToMenu();
+        }}
+      />
+    );
+
   return (
     <MaterialRoot appearance={state.appearance} onRendererChange={setRenderer}>
       <div className="app-shell">
@@ -81,6 +170,15 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
               aria-labelledby="session-heading"
             >
               <h1 id="session-heading">Make your next track.</h1>
+              {libraries.current.some(
+                ({ library }) =>
+                  Object.keys(library.getSnapshot().drafts).length > 0,
+              ) && (
+                <p className="message" role="status">
+                  Unsaved sample tags remain in this session. Restore the sample
+                  folder to save them.
+                </p>
+              )}
               <div className="project-actions">
                 <Button
                   className="project-action primary"
@@ -208,31 +306,6 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
                 <p className="message">{state.recoveryMessage}</p>
               )}
             </MaterialSurface>
-            {state.entry && (
-              <MaterialSurface
-                as="section"
-                className="handoff"
-                aria-labelledby="entry-heading"
-              >
-                <h2 id="entry-heading">Project ready</h2>
-                <p className="small">
-                  {state.entry.project.name} is ready for the tracker. Tracker
-                  editing is not available in this build.
-                </p>
-                {state.entry.missingSamples.length > 0 && (
-                  <p className="small">
-                    {state.entry.missingSamples.length} missing sample
-                    references were kept.
-                  </p>
-                )}
-                <Button
-                  className="button"
-                  onClick={() => controller.returnToMenu()}
-                >
-                  Return to menu
-                </Button>
-              </MaterialSurface>
-            )}
             <MaterialSurface
               as="section"
               className="folder-panel"

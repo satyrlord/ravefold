@@ -24,17 +24,11 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      testIgnore: /fallback\.spec\.ts/,
       use: {
         browserName: "chromium",
         channel: "chromium",
         launchOptions: { args: ["--enable-gpu"] },
       },
-    },
-    {
-      name: "unsupported-browser",
-      testMatch: /fallback\.spec\.ts/,
-      use: { browserName: "firefox" },
     },
   ],
   webServer: {

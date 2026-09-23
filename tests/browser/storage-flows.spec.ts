@@ -76,7 +76,7 @@ test("both folders allow one new-project entry and preserve every audio byte", a
     .getByRole("button", { name: "Enter tracker", exact: true })
     .dblclick();
   await expect(
-    page.getByRole("heading", { name: "Project ready", exact: true }),
+    page.getByRole("heading", { name: "Samples", exact: true }),
   ).toBeVisible();
   const after = await snapshotFS(page);
   expect(after.entries).toHaveLength(1);
@@ -122,7 +122,7 @@ test("Open rejects invalid documents and keeps valid missing-sample positions", 
     .getByRole("button", { name: "Enter tracker", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Project ready", exact: true }),
+    page.getByRole("heading", { name: "Samples", exact: true }),
   ).toBeVisible();
   const entry = (await snapshotFS(page)).entries[0]!;
   expect(entry.mode).toBe("open");
@@ -136,6 +136,13 @@ test("Open rejects invalid documents and keeps valid missing-sample positions", 
       durationTicks: 3840,
     },
   ]);
+  await expect(
+    page.getByText("Missing: missing.wav", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".overview-clip.missing")).toHaveAttribute(
+    "title",
+    "Bass/missing.wav",
+  );
   expect(errors).toEqual([]);
 });
 
@@ -173,7 +180,7 @@ test("recovery cancellation and selection do not change recovery files", async (
     .getByRole("button", { name: "Enter tracker", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Project ready", exact: true }),
+    page.getByRole("heading", { name: "Samples", exact: true }),
   ).toBeVisible();
   const after = await snapshotFS(page);
   expect(after.entries[0]?.mode).toBe("recover");
@@ -243,7 +250,7 @@ test("unavailable persistence keeps the session usable without fallback storage"
     .getByRole("button", { name: "Enter tracker", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "Project ready", exact: true }),
+    page.getByRole("heading", { name: "Samples", exact: true }),
   ).toBeVisible();
   expect((await snapshotFS(page)).entries).toHaveLength(1);
   expect(await page.evaluate(() => Object.keys(localStorage))).toEqual([]);

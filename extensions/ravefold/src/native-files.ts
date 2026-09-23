@@ -13,6 +13,18 @@ import {
   type NativeHandle,
 } from "../../../shared/native-protocol.ts";
 import { validateWav } from "../../../src/domain/wav.ts";
+import {
+  MAX_TAGS_BYTES,
+  parseTagManifest,
+  TAGS_FILENAME,
+  TAGS_LOCK_FILENAME,
+} from "../../../src/domain/library-tags.ts";
+import {
+  MAX_TAG_RESERVATION_BYTES,
+  parseTagReservation,
+  TAG_RESERVATION_PATTERN,
+  TAG_RESERVATION_BUSY_MESSAGE,
+} from "../../../src/domain/tag-reservation.ts";
 
 export type { NativeHandle } from "../../../shared/native-protocol.ts";
 
@@ -29,14 +41,25 @@ interface Entry {
   grant: Grant;
   parts: string[];
   pending?: boolean;
-  owned?: "probe" | "settings" | "audio";
+  owned?: "probe" | "settings" | "tags" | "tag-register" | "audio";
   version?: string;
 }
 interface MetadataWriter {
-  kind: "probe" | "settings";
+  kind: "probe" | "settings" | "tags" | "tag-register";
   entry: Entry;
   version: string;
   text?: string;
+  tagLock?: TagLock;
+}
+interface TagLock {
+  path: string;
+  identity: string;
+  contents: string;
+}
+interface OwnedRegister {
+  grant: Grant;
+  name: string;
+  version: string;
 }
 interface AudioWriter {
   kind: "audio";
@@ -139,6 +162,11 @@ function fields(request: Record<string, unknown>, allowed: string[]): void {
 export class NativeFiles {
   private grants = new Map<string, Grant>();
   private roots = new Map<Role, Grant>();
+  private rememberedRoots = new Map<
+    string,
+    { path: string; identity: string }
+  >();
+  private retainedRegisters = new Map<string, OwnedRegister>();
   private entries = new Map<string, Entry>();
   private pathEntries = new Map<string, Map<string, Entry>>();
   private writers = new Map<string, Writer>();
@@ -173,7 +201,17 @@ export class NativeFiles {
     this.grants.set(grant.id, grant);
     this.roots.set(role, grant);
     this.pathEntries.set(grant.id, new Map());
-    return this.addEntry(grant, [], "directory").descriptor;
+    const root = this.addEntry(grant, [], "directory").descriptor;
+    this.rememberedRoots.set(root.id, canonical);
+    for (const [name, record] of this.retainedRegisters) {
+      if (
+        record.grant.path === canonical.path &&
+        record.grant.identity === canonical.identity &&
+        (await this.releaseOwnedRegister(record))
+      )
+        this.retainedRegisters.delete(name);
+    }
+    return root;
   }
 
   async restoreRoot(
@@ -247,6 +285,7 @@ export class NativeFiles {
             "TypeMismatchError",
             "InvalidStateError",
             "InvalidModificationError",
+            "NoModificationAllowedError",
             "AbortError",
             "QuotaExceededError",
           ].includes(error.name)
@@ -271,9 +310,19 @@ export class NativeFiles {
     for (const writer of this.writers.values())
       await this.discardWriter(writer);
     this.writers.clear();
+    await this.cleanupRegisters();
     this.entries.clear();
     this.pathEntries.clear();
     this.grants.clear();
+    this.roots.clear();
+    this.rememberedRoots.clear();
+    this.retainedRegisters.clear();
+  }
+
+  async revokeAll(): Promise<void> {
+    await this.queue;
+    this.active();
+    for (const grant of [...this.grants.values()]) await this.revoke(grant);
     this.roots.clear();
   }
 
@@ -294,6 +343,7 @@ export class NativeFiles {
   }
 
   private async revoke(grant: Grant): Promise<void> {
+    await this.cleanupRegisters(grant);
     this.grants.delete(grant.id);
     for (const [id, cursor] of this.cursors) {
       if (cursor.entry.grant === grant) {
@@ -310,6 +360,52 @@ export class NativeFiles {
     for (const entry of this.pathEntries.get(grant.id)?.values() ?? [])
       this.entries.delete(entry.descriptor.id);
     this.pathEntries.delete(grant.id);
+  }
+
+  private async cleanupRegisters(grant?: Grant): Promise<void> {
+    for (const entry of this.entries.values()) {
+      if (
+        entry.owned !== "tag-register" ||
+        !entry.version ||
+        (grant && entry.grant !== grant)
+      )
+        continue;
+      const name = entry.descriptor.name;
+      this.retainedRegisters.set(name, {
+        grant: entry.grant,
+        name,
+        version: entry.version,
+      });
+    }
+    for (const [name, record] of this.retainedRegisters) {
+      if (
+        (!grant || record.grant === grant) &&
+        (await this.releaseOwnedRegister(record))
+      )
+        this.retainedRegisters.delete(name);
+    }
+  }
+
+  private async releaseOwnedRegister(record: OwnedRegister): Promise<boolean> {
+    try {
+      const root = await fs.lstat(record.grant.path);
+      if (root.isSymbolicLink() || identity(root) !== record.grant.identity)
+        return true;
+      const target = path.join(record.grant.path, record.name);
+      const current = await fs.lstat(target);
+      if (
+        current.isSymbolicLink() ||
+        version(current) !== record.version ||
+        current.size > MAX_TAG_RESERVATION_BYTES
+      )
+        return true;
+      parseTagReservation(await fs.readFile(target, "utf8"), record.name);
+      if (version(await fs.lstat(target)) !== record.version) return true;
+      await fs.unlink(target);
+      return true;
+    } catch (error) {
+      return named(error, "ENOENT");
+    }
   }
 
   private addEntry(
@@ -397,7 +493,9 @@ export class NativeFiles {
     return { path: candidate, stat };
   }
 
-  private writeKind(entry: Entry): "probe" | "settings" | "audio" {
+  private writeKind(
+    entry: Entry,
+  ): "probe" | "settings" | "tags" | "tag-register" | "audio" {
     const name = entry.parts.at(-1);
     if (
       entry.grant.role === "samples" &&
@@ -410,6 +508,17 @@ export class NativeFiles {
     if (entry.parts.length !== 1)
       fail("NotAllowedError", "This file cannot be changed.");
     const rootName = entry.parts[0]!;
+    if (
+      entry.grant.role === "samples" &&
+      TAG_RESERVATION_PATTERN.test(rootName)
+    ) {
+      if (entry.owned !== "tag-register")
+        fail(
+          "NotAllowedError",
+          "Only this session's tag reservation can change.",
+        );
+      return "tag-register";
+    }
     if (probePattern.test(rootName)) {
       if (entry.owned !== "probe")
         fail(
@@ -420,6 +529,8 @@ export class NativeFiles {
     }
     if (entry.grant.role === "settings" && rootName === settingsName)
       return "settings";
+    if (entry.grant.role === "samples" && rootName === TAGS_FILENAME)
+      return "tags";
     fail(
       "NotAllowedError",
       "Only new WAV files and approved metadata can be written.",
@@ -538,6 +649,20 @@ export class NativeFiles {
             child.pending = true;
           } else if (
             parent.parts.length === 0 &&
+            parent.grant.role === "samples" &&
+            TAG_RESERVATION_PATTERN.test(name)
+          ) {
+            child.owned = "tag-register";
+            child.pending = true;
+          } else if (
+            parent.parts.length === 0 &&
+            parent.grant.role === "samples" &&
+            name === TAGS_FILENAME
+          ) {
+            child.owned = "tags";
+            child.pending = true;
+          } else if (
+            parent.parts.length === 0 &&
             parent.grant.role === "settings" &&
             name === settingsName
           ) {
@@ -555,6 +680,29 @@ export class NativeFiles {
       }
       case "same": {
         fields(request, ["handle", "other"]);
+        const leftId = string(request.handle);
+        const rightId = string(request.other);
+        const absentId = !this.entries.has(leftId)
+          ? leftId
+          : !this.entries.has(rightId)
+            ? rightId
+            : undefined;
+        if (absentId) {
+          const remembered = this.rememberedRoots.get(absentId);
+          const live = this.entries.get(absentId === leftId ? rightId : leftId);
+          if (
+            remembered &&
+            live?.descriptor.kind === "directory" &&
+            live.parts.length === 0
+          ) {
+            const current = await this.location(live);
+            return (
+              current.path === remembered.path &&
+              !!current.stat &&
+              identity(current.stat) === remembered.identity
+            );
+          }
+        }
         const left = await this.location(this.entry(request.handle), true);
         const right = await this.location(this.entry(request.other), true);
         return (
@@ -611,11 +759,22 @@ export class NativeFiles {
         const kind = this.writeKind(entry);
         if ([...this.writers.values()].some((writer) => writer.entry === entry))
           fail("InvalidStateError", "This file already has an active write.");
+        if (kind === "tags") return this.openTagWriter(entry);
         const current = await this.location(entry, entry.pending);
         if (current.stat) {
           if (kind === "probe" || kind === "audio")
             fail("NotAllowedError", "An existing file cannot be replaced.");
-          parseSettings(await this.readText(entry, MAX_SETTINGS_BYTES));
+          if (kind === "tag-register") {
+            if (!entry.version || entry.version !== version(current.stat))
+              fail(
+                "InvalidModificationError",
+                "The tag reservation changed in another session.",
+              );
+            parseTagReservation(
+              await this.readText(entry, MAX_TAG_RESERVATION_BYTES),
+              entry.descriptor.name,
+            );
+          } else parseSettings(await this.readText(entry, MAX_SETTINGS_BYTES));
         }
         const id = randomUUID();
         if (kind === "audio") {
@@ -655,7 +814,12 @@ export class NativeFiles {
           fail("NotAllowedError", "A WAV file requires binary data.");
         if (
           typeof request.data !== "string" ||
-          Buffer.byteLength(request.data) > MAX_SETTINGS_BYTES
+          Buffer.byteLength(request.data) >
+            (writer.kind === "tags"
+              ? MAX_TAGS_BYTES
+              : writer.kind === "tag-register"
+                ? MAX_TAG_RESERVATION_BYTES
+                : MAX_SETTINGS_BYTES)
         )
           fail(
             "QuotaExceededError",
@@ -673,7 +837,10 @@ export class NativeFiles {
               "NotAllowedError",
               "The access manifest content is not valid.",
             );
-        } else parseSettings(request.data);
+        } else if (writer.kind === "tags") parseTagManifest(request.data);
+        else if (writer.kind === "tag-register")
+          parseTagReservation(request.data, writer.entry.descriptor.name);
+        else parseSettings(request.data);
         writer.text = request.data;
         return null;
       }
@@ -792,7 +959,11 @@ export class NativeFiles {
           [...entry.parts, next.name],
           next.isDirectory() ? "directory" : "file",
         );
-        await this.location(child);
+        const location = await this.location(child, true);
+        if (!location.stat) {
+          if (!child.owned) this.deleteEntry(child);
+          continue;
+        }
         entries.push(child.descriptor);
       }
       return { entries, cursor: id };
@@ -803,8 +974,121 @@ export class NativeFiles {
     }
   }
 
+  private async openTagWriter(
+    entry: Entry,
+  ): Promise<{ writer: string; kind: "metadata" }> {
+    const tagLock = await this.acquireTagLock(entry);
+    try {
+      const current = await this.location(entry, entry.pending);
+      if (current.stat)
+        parseTagManifest(await this.readText(entry, MAX_TAGS_BYTES));
+      const id = randomUUID();
+      this.writers.set(id, {
+        kind: "tags",
+        entry,
+        version: current.stat ? version(current.stat) : "pending",
+        tagLock,
+      });
+      return { writer: id, kind: "metadata" };
+    } catch (error) {
+      await this.releaseTagLock(tagLock);
+      throw error;
+    }
+  }
+
+  private async acquireTagLock(entry: Entry): Promise<TagLock> {
+    await this.location(entry, true);
+    const target = path.join(entry.grant.path, TAGS_LOCK_FILENAME);
+    let file: NodeFileHandle;
+    try {
+      file = await fs.open(target, "wx", 0o600);
+    } catch (error) {
+      if (named(error, "EEXIST"))
+        fail("NoModificationAllowedError", TAG_RESERVATION_BUSY_MESSAGE);
+      throw error;
+    }
+    let tagLock: TagLock | undefined;
+    try {
+      tagLock = {
+        path: target,
+        identity: identity(await file.stat()),
+        contents:
+          JSON.stringify({
+            schemaVersion: 1,
+            kind: "ravefold-tag-write-lock",
+            owner: randomUUID(),
+          }) + "\n",
+      };
+      await file.writeFile(tagLock.contents, "utf8");
+      await file.sync();
+      await file.close();
+      await this.location(entry, true);
+      return tagLock;
+    } catch (error) {
+      await file.close().catch(() => undefined);
+      if (tagLock) await this.releaseTagLock(tagLock);
+      throw error;
+    }
+  }
+
+  private async ownsTagLock(tagLock: TagLock): Promise<boolean> {
+    try {
+      const current = await fs.lstat(tagLock.path);
+      if (
+        current.isSymbolicLink() ||
+        identity(current) !== tagLock.identity ||
+        current.size !== Buffer.byteLength(tagLock.contents)
+      )
+        return false;
+      const file = await fs.open(
+        tagLock.path,
+        constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+      );
+      try {
+        if (version(await file.stat()) !== version(current)) return false;
+        const bytes = Buffer.alloc(Buffer.byteLength(tagLock.contents));
+        const read = await file.read(bytes, 0, bytes.length, 0);
+        if (
+          read.bytesRead !== bytes.length ||
+          bytes.toString("utf8") !== tagLock.contents
+        )
+          return false;
+        return (
+          version(await file.stat()) === version(current) &&
+          version(await fs.lstat(tagLock.path)) === version(current)
+        );
+      } finally {
+        await file.close();
+      }
+    } catch {
+      return false;
+    }
+  }
+
+  private async releaseTagLock(tagLock: TagLock): Promise<void> {
+    try {
+      if (await this.ownsTagLock(tagLock)) await fs.unlink(tagLock.path);
+    } catch {
+      // Keep reservations that this operation cannot prove it owns.
+    }
+  }
+
+  private async checkTagLock(writer: MetadataWriter): Promise<void> {
+    if (
+      writer.kind === "tags" &&
+      (!writer.tagLock || !(await this.ownsTagLock(writer.tagLock)))
+    )
+      fail(
+        "InvalidModificationError",
+        "The tag save reservation changed. Your previous tags remain unchanged.",
+      );
+  }
+
   private async discardWriter(writer: Writer): Promise<void> {
-    if (writer.kind !== "audio") return;
+    if (writer.kind !== "audio") {
+      if (writer.tagLock) await this.releaseTagLock(writer.tagLock);
+      return;
+    }
     await writer.file.close().catch(() => undefined);
     try {
       const staged = await fs.lstat(writer.temporary);
@@ -849,12 +1133,20 @@ export class NativeFiles {
     if (writer.text === undefined)
       fail("InvalidStateError", "The file write has no content.");
     const entry = writer.entry;
+    await this.checkTagLock(writer);
     const kind = this.writeKind(entry);
     const current = await this.location(entry, true);
     if ((current.stat ? version(current.stat) : "pending") !== writer.version)
       fail("InvalidModificationError", "The file changed in another session.");
     if (kind === "settings" && current.stat)
       parseSettings(await this.readText(entry, MAX_SETTINGS_BYTES));
+    if (kind === "tags" && current.stat)
+      parseTagManifest(await this.readText(entry, MAX_TAGS_BYTES));
+    if (kind === "tag-register" && current.stat)
+      parseTagReservation(
+        await this.readText(entry, MAX_TAG_RESERVATION_BYTES),
+        entry.descriptor.name,
+      );
     const temporary = path.join(
       entry.grant.path,
       `.ravefold-write-${randomUUID()}.manifest.json`,
@@ -886,11 +1178,47 @@ export class NativeFiles {
           "The metadata write changed before commit.",
         );
       if (writer.version === "pending") {
+        await this.checkTagLock(writer);
         await fs.link(temporary, checked.path);
       } else {
         // Rename is atomic. The version check is not an operating-system
         // compare-and-swap operation against concurrent external changes.
-        await fs.rename(temporary, checked.path);
+        for (let attempt = 0; ; attempt++) {
+          this.active();
+          const destination = await this.location(entry);
+          if (!destination.stat || version(destination.stat) !== writer.version)
+            fail(
+              "InvalidModificationError",
+              "The file changed in another session.",
+            );
+          await this.checkTagLock(writer);
+          const source = await fs.lstat(temporary);
+          if (
+            source.isSymbolicLink() ||
+            identity(source) !== temporaryIdentity ||
+            version(source) !== version(staged)
+          )
+            fail(
+              "InvalidModificationError",
+              "The metadata write changed before commit.",
+            );
+          try {
+            await fs.rename(temporary, destination.path);
+            break;
+          } catch (error) {
+            // Windows can deny replacement while another reader closes its handle.
+            if (
+              attempt >= 9 ||
+              !(
+                named(error, "EPERM") ||
+                named(error, "EACCES") ||
+                named(error, "EBUSY")
+              )
+            )
+              throw error;
+            await new Promise<void>((resolve) => setTimeout(resolve, 20));
+          }
+        }
       }
       entry.pending = false;
       committedPath = checked.path;
@@ -904,7 +1232,7 @@ export class NativeFiles {
         /* Preserve any file that this operation does not own. */
       }
     }
-    if (committedPath && kind === "probe") {
+    if (committedPath && (kind === "probe" || kind === "tag-register")) {
       const committed = await fs.lstat(committedPath);
       if (
         !committed.isSymbolicLink() &&
@@ -929,13 +1257,18 @@ export class NativeFiles {
     const current = await this.location(entry, true);
     if (current.stat) {
       if (
-        entry.owned !== "probe" ||
+        (entry.owned !== "probe" && entry.owned !== "tag-register") ||
         !entry.version ||
         version(current.stat) !== entry.version
       )
         fail("NotAllowedError", "This file cannot be removed.");
-      const expected = JSON.stringify({ kind: "ravefold-access-check", name });
-      if ((await this.readText(entry, MAX_SETTINGS_BYTES)) !== expected)
+      const contents = await this.readText(entry, MAX_SETTINGS_BYTES);
+      const expected =
+        entry.owned === "probe"
+          ? JSON.stringify({ kind: "ravefold-access-check", name })
+          : contents;
+      if (entry.owned === "tag-register") parseTagReservation(contents, name);
+      if (contents !== expected)
         fail(
           "NotAllowedError",
           "The access manifest changed. It will remain in place.",

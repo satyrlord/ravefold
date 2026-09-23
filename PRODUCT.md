@@ -6,9 +6,9 @@ The application uses a web browser. The first release supports full editing on
 desktop and laptop computers with a keyboard and pointer. The first release does
 not include full editing on tablets or phones.
 
-Official support is for Chromium-based desktop browsers only. Other browsers
-must open and operate without browser-related errors. An unavailable feature
-must not cause the rest of the application to fail.
+RaveFold supports Chromium-based desktop browsers only. Other browser engines
+are outside the product scope. An unavailable feature must not cause the rest of
+the application to fail in a supported browser.
 
 An optional desktop editor extension supplies native folder access in its own
 application tab. It uses the same interface and file protection rules. It

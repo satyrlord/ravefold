@@ -29,7 +29,7 @@ with user approval:
 - Browser persistence contains folder-access references only, without settings
   values.
 - Tooltips are the only form of product help.
-- Other browsers must operate without browser-related application errors.
+- Browser support and tests are limited to Chromium-based desktop browsers.
 
 ## Proposed behavior
 

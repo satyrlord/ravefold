@@ -1,8 +1,7 @@
 # Spec-013: Import OG archive samples
 
 Status: Implemented and accepted by the user on 2026-09-23. Chromium checks
-pass. The local Firefox runtime cannot create a test page, so the full quality
-gate is not green.
+pass. Browser support and tests are limited to Chromium-based desktop browsers.
 
 ## Outcome
 
@@ -60,10 +59,9 @@ Strict type checks, unit tests, document checks and the production build passed.
 The headless Chromium suite passed 39 tests. These tests include an empty
 folder, stop and retry, existing audio protection, and native editor import.
 
-Two Firefox fallback tests failed before the browser created a page. Playwright
-reported `browserContext.newPage` with an undefined `_page`. The test runner did
-not exit after these failures and was stopped. These failures do not show an
-application error, but they leave cross-browser operation unverified.
+On 2026-09-23, the user excluded other browser engines from support and tests.
+The earlier full gate stopped during tests in another engine. Those tests are
+not release requirements.
 
 Four local PXD/WAV pairs matched byte for byte. A local sweep decoded all 3,147
 installed PXD files. The requested ISO has 1,279 listed PXD members. A complete

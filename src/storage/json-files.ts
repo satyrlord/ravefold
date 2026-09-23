@@ -61,7 +61,7 @@ export async function readJson<T>(
   }
 }
 
-/** Settings are the only mutable user document in this slice. */
+/** This writer owns settings. Sample tags use the library manifest writer. */
 export async function writeValidatedJson<T>(
   directory: DirectoryHandle,
   name: string,
