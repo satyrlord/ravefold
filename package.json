@@ -40,5 +40,9 @@
     "@fontsource-variable/space-grotesk": "5.3.0",
     "react": "19.3.0",
     "react-dom": "19.3.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "@vscode/vsce-sign@2.1.0": true
   }
 }
