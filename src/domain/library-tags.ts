@@ -1,7 +1,6 @@
 import { validateSamplePath } from "./project.ts";
 
 export const TAGS_FILENAME = "ravefold-tags.manifest.json";
-export const TAGS_LOCK_FILENAME = ".ravefold-tags-write.manifest.json";
 export const MAX_TAGS_BYTES = 4 * 1024 * 1024;
 export const MAX_SAMPLE_TAGS = 32;
 export const MAX_TAG_LENGTH = 40;

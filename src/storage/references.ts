@@ -3,7 +3,6 @@ import {
   type DirectoryHandle,
   type FolderKind,
 } from "./handles.ts";
-import { getNativeBridge, isNativeDirectoryHandle } from "./native-bridge.ts";
 
 export interface FolderReferences {
   samples?: DirectoryHandle;
@@ -64,9 +63,6 @@ function openDatabase(): Promise<IDBDatabase> {
 export async function loadFolderReferences(): Promise<ReferenceLoad> {
   let database: IDBDatabase | undefined;
   try {
-    const native = getNativeBridge();
-    if (native)
-      return { available: true, references: await native.loadReferences() };
     database = await openDatabase();
     const references = await new Promise<FolderReferences>(
       (resolve, reject) => {
@@ -99,12 +95,6 @@ export async function saveFolderReference(
 ): Promise<ReferenceSave> {
   let database: IDBDatabase | undefined;
   try {
-    const native = getNativeBridge();
-    if (native || isNativeDirectoryHandle(handle)) {
-      if (!native) throw new Error(unavailableMessage);
-      await native.saveReference(kind, handle);
-      return { available: true };
-    }
     database = await openDatabase();
     await new Promise<void>((resolve, reject) => {
       const transaction = database!.transaction(storeName, "readwrite");

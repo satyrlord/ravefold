@@ -112,14 +112,14 @@ Malformed or unsupported manifests remain unchanged.
 
 The writer preserves the last valid file until commit. App writes use shared
 reservation manifests in the sample folder. This protocol coordinates browser
-and native sessions. Web Locks provide additional ordering within one browser
-origin. The [tag write protocol](../tag-write-protocol.md) gives the contract,
-recovery procedure and verification limits.
+sessions. Web Locks provide additional ordering within one browser origin. The
+[tag write protocol](../tag-write-protocol.md) gives the contract, recovery
+procedure and verification limits.
 
 Each draft retains the saved tags from the time of its first edit. A save
-rejects changes to the same stored record. It merges independent records. Native
-folder access also restricts tag writes to the named root manifest. Audio files
-cannot be changed through this operation.
+rejects changes to the same stored record. It merges independent records. Tag
+writes use the named root manifest. Audio files cannot be changed through this
+operation.
 
 ### Source audio
 
@@ -168,19 +168,20 @@ Verification date: 2026-09-23. Runtime: Node.js 24.19.0 on Windows. Browser
 tests use the production build and run without visible windows. Browser support
 and tests are limited to Chromium. No Firefox or Safari tests remain.
 
-`npm run quality:full` passed with 191 unit tests and 48 Chromium tests. One
-POSIX-specific unit test was skipped on Windows. The gate also passed strict
-compiler checks, Markdown checks, formatting and the application/extension
-build. `git diff --check` passed after validation.
+Before removal of editor support, `npm run quality:full` passed with 191 unit
+tests and 48 Chromium tests. One POSIX-specific unit test was skipped on
+Windows. The gate also passed strict compiler checks, Markdown checks,
+formatting and build checks. `git diff --check` passed after validation. These
+counts describe the earlier test suite.
 
 | Check     | Evidence                                                                                                                                   |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | S002-AC01 | Duplicate filenames resolve to distinct relative paths and decoded source hashes in `tests/browser/library.spec.ts`.                       |
-| S002-AC02 | Tags survive reload, removal and subsequent search or filtering. Browser and native-folder cases pass.                                     |
-| S002-AC03 | Denied commits preserve prior tags and show unsaved status. Browser and native re-entry preserve drafts after permission loss.             |
+| S002-AC02 | Tags survive reload, removal and subsequent search or filtering. Browser cases pass.                                                       |
+| S002-AC03 | Denied commits preserve prior tags and show unsaved status. Browser re-entry preserves drafts after permission loss.                       |
 | S002-AC04 | Browser instrumentation records at most one active preview. Unit tests cover stale decode, resume, stop and disposal.                      |
 | S002-AC05 | A 1,203-file browser catalog remains searchable without decoding. A 10,000-entry unit catalog performs no audio reads.                     |
-| S002-AC06 | Browser and native checks compare audio hashes. Tag writes and reservation records stay in sample-folder manifests.                        |
+| S002-AC06 | Browser checks compare audio hashes. Tag writes and reservation records stay in sample-folder manifests.                                   |
 | S002-AC07 | Keyboard search, tag edits, preview and waveform requests pass. All six skins pass automated accessibility checks in dark and light modes. |
 
 Layout checks cover 1440 by 960, 1280 by 720 and the 640 by 360 layout at 200%
@@ -195,7 +196,6 @@ DESIGN.md now records the tracker values. Existing design-tool metadata drift
 was not repaired as part of this slice.
 
 Source audition uses generated WAV fixtures. These checks do not establish
-listening quality, real-library memory limits or combined playback capacity. The
-mixed storage test uses a browser-style disk adapter and actual native hosts.
-Actual Chromium file-handle contention with a native host remains unmeasured.
-The [protocol record](../tag-write-protocol.md) explains this limit.
+listening quality, real-library memory limits or combined playback capacity.
+Actual Chromium file-handle contention across browser origins remains
+unmeasured. The [protocol record](../tag-write-protocol.md) explains this limit.

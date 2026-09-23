@@ -56,8 +56,9 @@ to the repository. Run the full quality gate for the menu change.
 ## Implementation evidence
 
 Strict type checks, unit tests, document checks and the production build passed.
-The headless Chromium suite passed 39 tests. These tests include an empty
-folder, stop and retry, existing audio protection, and native editor import.
+Before removal of editor support, the headless Chromium suite passed 39 tests.
+These tests included an empty folder, stop and retry, and existing audio
+protection. This count describes the earlier test suite.
 
 On 2026-09-23, the user excluded other browser engines from support and tests.
 The earlier full gate stopped during tests in another engine. Those tests are

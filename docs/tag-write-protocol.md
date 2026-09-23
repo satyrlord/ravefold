@@ -3,8 +3,8 @@
 ## Contract
 
 All application tag saves use one protocol in the selected sample folder. The
-protocol applies across browser origins and native editor sessions. Browser
-locks can reduce local contention. They do not supply the shared guarantee.
+protocol applies across browser origins. Browser locks can reduce local
+contention. They do not supply the shared guarantee.
 [Private research](research/local-research.md) contains source evidence and
 algorithm attribution.
 
@@ -57,23 +57,9 @@ concurrently removed register cannot permit two app commits.
 
 The argument requires complete enumeration of stable entries and current file
 reads. It does not require a directory snapshot or a particular entry order. The
-native and browser file adapters supply these operations. External tools that
-ignore the protocol can still change files. Content checks detect such changes
-before commit when observable.
-
-## Native protections
-
-The native host permits reservation files only at the sample-folder root. It
-validates the reserved name, owner, fields, ticket and size. A host can change
-or remove only registers that it created during its current session. Removal
-checks the committed file version and validates the content again. These
-permissions do not permit audio changes.
-
-The native host also has a static reservation file:
-`.ravefold-tags-write.manifest.json`. This reservation protects native file
-writers. It does not replace the shared protocol. The host checks its disk
-identity and owner token before release. It preserves changed or replaced
-reservation files.
+browser file adapter supplies these operations. External tools that ignore the
+protocol can still change files. Content checks detect such changes before
+commit when observable.
 
 ## Recovery after an interrupted session
 
@@ -82,16 +68,14 @@ ownership from elapsed time. It does not take an abandoned reservation. The
 previous tag manifest remains available.
 
 A live process retains an unsuccessful cleanup in memory. After access returns,
-it retries only its own unchanged register in the confirmed same folder. The
-native host also checks disk identity and file version during grant changes and
-disposal. Changed or replaced registers remain in place.
+it retries only its own unchanged register in the confirmed same folder. Changed
+or replaced registers remain in place.
 
-1. Close all RaveFold browser tabs and native editor sessions.
+1. Close all RaveFold browser tabs.
 2. Open the selected sample folder in the operating system file manager.
 3. Remove only abandoned `.ravefold-tags-lock-<uuid>.manifest.json` files.
-4. Remove an abandoned `.ravefold-tags-write.manifest.json` file if present.
-5. Keep `ravefold-tags.manifest.json` and all audio files unchanged.
-6. Open RaveFold and retry the tag save.
+4. Keep `ravefold-tags.manifest.json` and all audio files unchanged.
+5. Open RaveFold and retry the tag save.
 
 Do not remove reservations while any RaveFold session remains open. The register
 pattern requires a UUID with hexadecimal groups of 8, 4, 4, 4 and 12 characters.
@@ -101,15 +85,13 @@ Other manifest names are outside this procedure.
 
 `tests/library-reservation.test.ts` checks simultaneous independent clients,
 late entry, cancelled waits, abandoned registers and changed ownership. Its disk
-test combines a browser-style adapter with two independent native hosts. Each
-host uses the real native bridge and native file implementation. The test starts
-with no registry and checks that three edits survive.
+test uses three independent browser-style disk adapters. The test starts with no
+registry and checks that three edits survive.
 
 This disk adapter test does not measure external updates through actual Chromium
-file handles. That browser-to-native contention check remains a verification
-limit. The protocol argument requires current external file reads and complete
+file handles. That browser-origin contention check remains a verification limit.
+The protocol argument requires current external file reads and complete
 enumeration of stable entries from each adapter.
 
-`tests/native-files.test.ts` checks native reservation ownership and protection
-of audio files. `tests/library-tags.test.ts` checks record conflicts, tag reload
-and interrupted writes. Browser tests remain part of `quality:full`.
+`tests/library-tags.test.ts` checks record conflicts, tag reload and interrupted
+writes. Browser tests remain part of `quality:full`.

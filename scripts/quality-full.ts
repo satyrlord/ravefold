@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 const npmCli = process.env.npm_execpath;
 if (!npmCli) throw new Error("Use npm run quality:full to start the checks.");
 
-for (const script of ["quality:quick", "build:extension"]) {
+for (const script of ["quality:quick", "build"]) {
   const result = spawnSync(process.execPath, [npmCli, "run", script], {
     stdio: "inherit",
   });

@@ -1,5 +1,3 @@
-import { getNativeBridge, nativeBridgeAvailable } from "./native-bridge.ts";
-
 export type FolderKind = "samples" | "settings";
 export type AccessState = "granted" | "denied" | "prompt";
 
@@ -57,10 +55,7 @@ function pickerWindow(): PickerWindow {
 }
 
 export function pickerAvailable(): boolean {
-  return (
-    nativeBridgeAvailable() ||
-    typeof pickerWindow().showDirectoryPicker === "function"
-  );
+  return typeof pickerWindow().showDirectoryPicker === "function";
 }
 
 export function isEmbeddedContext(): boolean {
@@ -68,16 +63,12 @@ export function isEmbeddedContext(): boolean {
 }
 
 export function accessDeniedMessage(): string {
-  if (nativeBridgeAvailable())
-    return "Folder access is unavailable. Select the folder again.";
   return isEmbeddedContext()
     ? "This browser denied folder access. The host can restrict access in an embedded view. Use the host control to open RaveFold in a Chromium browser window."
     : "Read and write permission is required.";
 }
 
 export async function pickFolder(kind: FolderKind): Promise<DirectoryHandle> {
-  const native = getNativeBridge();
-  if (native) return native.pickFolder(kind);
   const picker = pickerWindow().showDirectoryPicker;
   if (!picker)
     throw new Error("Folder selection is unavailable in this browser.");

@@ -1,8 +1,8 @@
 # RaveFold product slices
 
-Status: Specs 001, 002 and 013 are implemented. The user accepted spec-013.
-Other specifications stay drafts. Browser support and tests are limited to
-Chromium.
+Status: Specs 001, 002 and 013 are implemented. The user accepted specs 001
+and 013. Other specifications stay drafts. Browser support and tests are limited
+to Chromium.
 
 ## Authority and review boundary
 

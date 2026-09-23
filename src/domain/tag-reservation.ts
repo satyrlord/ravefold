@@ -2,7 +2,7 @@ export const TAG_RESERVATION_PATTERN =
   /^\.ravefold-tags-lock-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.manifest\.json$/u;
 export const MAX_TAG_RESERVATION_BYTES = 256;
 export const TAG_RESERVATION_BUSY_MESSAGE =
-  "Tag changes are blocked. Close every RaveFold browser tab and editor session. In the sample folder, remove only abandoned .ravefold-tags-lock-<uuid>.manifest.json files and .ravefold-tags-write.manifest.json. Keep ravefold-tags.manifest.json and all audio files. Then open RaveFold and retry.";
+  "Tag changes are blocked. Close every RaveFold browser tab. In the sample folder, remove only abandoned .ravefold-tags-lock-<uuid>.manifest.json files. Keep ravefold-tags.manifest.json and all audio files. Then open RaveFold and retry.";
 
 export interface TagReservationRecord {
   schemaVersion: 1;

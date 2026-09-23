@@ -20,18 +20,6 @@ import type {
   FileHandle,
   WritableHandle,
 } from "../src/storage/handles.ts";
-import { NativeFiles } from "../extensions/ravefold/src/native-files.ts";
-import {
-  NativeBridge,
-  type NativeHostApi,
-  type NativeMessageSource,
-} from "../src/storage/native-bridge.ts";
-import {
-  isNativeRequest,
-  NATIVE_CHANNEL,
-  NATIVE_VERSION,
-} from "../shared/native-protocol.ts";
-
 function deferred() {
   let resolve!: () => void;
   const promise = new Promise<void>((done) => {
@@ -199,50 +187,6 @@ test("reservation schema binds the writer identifier and rejects unsafe tickets"
     );
 });
 
-class NativeTestPort implements NativeHostApi, NativeMessageSource {
-  native: NativeFiles;
-  listeners = new Set<(event: MessageEvent) => void>();
-  constructor(native: NativeFiles) {
-    this.native = native;
-  }
-  addEventListener(_type: "message", listener: (event: MessageEvent) => void) {
-    this.listeners.add(listener);
-  }
-  removeEventListener(
-    _type: "message",
-    listener: (event: MessageEvent) => void,
-  ) {
-    this.listeners.delete(listener);
-  }
-  postMessage(value: unknown) {
-    assert.ok(isNativeRequest(value));
-    const send = (result: object) => {
-      for (const listener of this.listeners)
-        listener(
-          new MessageEvent("message", {
-            data: {
-              channel: NATIVE_CHANNEL,
-              version: NATIVE_VERSION,
-              id: value.id,
-              ...result,
-            },
-          }),
-        );
-    };
-    void this.native.dispatch(value.request).then(
-      (result) => send({ ok: true, result }),
-      (error: Error) =>
-        send({
-          ok: false,
-          error: {
-            name: error.name,
-            message: `${value.request.op}: ${error.message}`,
-          },
-        }),
-    );
-  }
-}
-
 /** A browser-style adapter uses disk snapshots and atomic close, with no host lock. */
 function browserDiskDirectory(folder: string): DirectoryHandle {
   const handles = new Map<string, FileHandle>();
@@ -344,22 +288,12 @@ function browserDiskDirectory(folder: string): DirectoryHandle {
   return root;
 }
 
-test("browser-style disk and independent native hosts use the same reservation protocol", async () => {
+test("independent browser-style disk adapters use the same reservation protocol", async () => {
   const folder = await fs.mkdtemp(
     path.join(os.tmpdir(), "ravefold-tag-reservation-"),
   );
-  const hosts = [new NativeFiles(), new NativeFiles()];
-  const bridges: NativeBridge[] = [];
   try {
-    const roots = [browserDiskDirectory(folder)];
-    for (const native of hosts) {
-      const port = new NativeTestPort(native);
-      const bridge = new NativeBridge(port, port);
-      bridges.push(bridge);
-      const root = bridge.handle(await native.selectRoot("samples", folder));
-      assert.equal(root.kind, "directory");
-      roots.push(root as DirectoryHandle);
-    }
+    const roots = Array.from({ length: 3 }, () => browserDiskDirectory(folder));
     let active = 0;
     let maximum = 0;
     await Promise.all(
@@ -397,8 +331,6 @@ test("browser-style disk and independent native hosts use the same reservation p
     assert.equal(Object.keys(final.value.samples).length, 3);
     assert.deepEqual(await fs.readdir(folder), [TAGS_FILENAME]);
   } finally {
-    for (const bridge of bridges) bridge.dispose();
-    await Promise.all(hosts.map((native) => native.dispose()));
     assert.equal(path.dirname(path.resolve(folder)), path.resolve(os.tmpdir()));
     assert.match(path.basename(folder), /^ravefold-tag-reservation-/u);
     await fs.rm(folder, { recursive: true, force: true });

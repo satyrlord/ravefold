@@ -529,12 +529,9 @@ not select the full Documents folder. Do not write to AppData without a message
 to the user. Request access through the browser folder picker. Save settings
 there only while the necessary permission permits writing.
 
-The standard application keeps browser-native folder access. The user approved
-an optional editor extension for native folder access in a separate application
-tab. Its [adapter contract](specs/spec-001-native-adapter.md) limits access to
-selected folders. It does not supply a local network service. Use IndexedDB only
-for the selected folders' access references. Do not store audio, settings
-values, projects or sample manifests there. Keep those files in their selected
+The application uses browser-native folder access. Use IndexedDB only for the
+selected folders' access references. Do not store audio, settings values,
+projects or sample manifests there. Keep those files in their selected
 filesystem locations.
 
 On startup, restore the folder references. Then examine their permissions. A
@@ -854,7 +851,6 @@ These requirements have user approval:
 - Existing audio cannot be deleted, overwritten, replaced or truncated.
 - Manifest files can be changed or deleted.
 - Settings use a dedicated RaveFold folder in Documents, selected during setup.
-  The optional editor extension uses the same selected-folder rules.
 - Browser persistence of folder-access references only. Folder permissions
   apply. No audio or settings values go into browser storage.
 - The user selects a destination folder for rendered songs.
@@ -975,8 +971,8 @@ interview. Keep deferred selections in their applicable specification. The
 division into specifications does not give permission for application
 implementation.
 
-The user authorized spec-001 implementation. Its file contracts and generated
-fixtures support menu verification without the later audio engine. Its
+The user accepted spec-001 after successful tests. Its file contracts and
+generated fixtures support menu verification without the later audio engine. Its
 specification records completed checks and remaining evidence limits.
 
 The user authorized spec-002 implementation on 2026-09-23 after a tracker mockup

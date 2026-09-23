@@ -1,7 +1,7 @@
 # Spec-001: Main menu and tracker entry
 
-Status: Implemented with user approval. Automated checks pass. The interview is
-completed. Native folder acceptance and hardware measurements remain incomplete.
+Status: Implemented and accepted by the user after successful tests. The
+interview is completed. Hardware measurements remain incomplete.
 
 ## Outcome
 
@@ -79,9 +79,8 @@ usual renderer is unavailable.
 
 Use Documents as the starting location for the settings picker. This is a
 location suggestion, not proof of the selected folder's absolute path. Do not
-infer a machine path from a displayed folder name. The standard browser uses its
-native folder picker. The optional editor extension uses the adapter with user
-approval in [the native contract](spec-001-native-adapter.md).
+infer a machine path from a displayed folder name. The browser uses its native
+folder picker.
 
 Count a file only after its header and available data pass the selected format
 checks. A filename extension alone is not sufficient. Spec-003 gives musical
@@ -104,9 +103,8 @@ again. Clearing browser data must not remove any files in the selected folders.
 
 An embedded host can deny file-system access after folder selection. Report that
 host limit when the permission result is denied. Keep entry blocked and keep
-files unchanged. Do not bypass browser permissions. The optional extension
-supplies a separate application tab with native folder access. Other embedded
-views keep their host permission limits.
+files unchanged. Do not bypass browser permissions. Embedded views keep their
+host permission limits.
 
 ## Main menu and entry controls
 
@@ -295,8 +293,8 @@ source and visual reviews are complete. The visual review result is `ship` for
 the menu scope. Build checks found no private path values or audio assets.
 
 The application uses the file contracts linked above. The menu transfers one
-checked entry result through its callback. The current application displays a
-project-ready state. Spec-006 will supply the tracker view.
+checked entry result through its callback. Spec-002 supplies the tracker view.
+Spec-006 will supply arrangement edits and playback.
 
 The following tests use generated data:
 
@@ -317,10 +315,11 @@ The handle persistence test uses browser-owned fixture folders. It proves native
 handle cloning and restoration. It does not prove native selection or disk
 permission prompts. Headless native pickers cancel without a selection.
 
-Native successful folder selection, permission revocation and the supported
-browser version range still need acceptance evidence. Compact viewport checks
-test the layout size at 200% zoom. They do not operate the browser zoom control.
-Hardware performance and combined audio work remain M1 tasks.
+The user reported successful tests and accepted this slice. This acceptance does
+not supply individual results for folder selection or permission revocation. The
+supported browser version range still needs evidence. Compact viewport checks
+test the layout size at 200% zoom, not the browser zoom control. Hardware
+performance and combined audio work remain M1 tasks.
 
 Chromium checks include Full, Reduced and Static effects. On 2026-09-23, the
 user excluded other browser engines from support and tests. Earlier checks in

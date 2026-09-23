@@ -104,12 +104,10 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
       if (!document.hidden) void controller.refreshPermissions();
     };
     window.addEventListener("focus", refresh);
-    window.addEventListener("ravefold:native-revoked", refresh);
     document.addEventListener("visibilitychange", refresh);
     const timer = window.setInterval(refresh, 5000);
     return () => {
       window.removeEventListener("focus", refresh);
-      window.removeEventListener("ravefold:native-revoked", refresh);
       document.removeEventListener("visibilitychange", refresh);
       clearInterval(timer);
       controller.dispose();
