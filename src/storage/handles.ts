@@ -10,7 +10,10 @@ export interface HandleBase {
 }
 
 export interface WritableHandle {
-  write(data: string | Blob | ArrayBuffer | ArrayBufferView): Promise<void>;
+  write(
+    data: string | Blob | ArrayBuffer | ArrayBufferView,
+    signal?: AbortSignal,
+  ): Promise<void>;
   close(): Promise<void>;
   abort(reason?: unknown): Promise<void>;
 }

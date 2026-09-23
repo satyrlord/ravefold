@@ -617,10 +617,10 @@ maximum song length.
 
 ## 7. Delivery sequence and acceptance tests
 
-[The specification index](specs/spec-000-index.md) divides delivery into twelve
-product slices. Each slice has a user outcome, dependencies and acceptance
-checks. The slices include all technical layers necessary for that outcome. Do
-not divide product delivery by UI, storage and audio layers.
+[The specification index](specs/spec-000-index.md) divides delivery into
+thirteen product slices. Each slice has a user outcome, dependencies and
+acceptance checks. The slices include all technical layers necessary for that
+outcome. Do not divide product delivery by UI, storage and audio layers.
 
 M0 and M1 stay evidence prerequisites for the full workspace. M2 through M4 are
 integration checkpoints. Their labels do not override slice dependencies. A
@@ -909,7 +909,7 @@ subject to the sample-folder and preparation requirements.
 | Import and export                 | User audio, background preparation and stereo WAV or MP3 export keep their user approval.                        | M3 preparation. M4 export timing, mix and destination checks.        |
 | Split stereo                      | Pair validation is planned. Historical channel layout is not an interface requirement.                           | M0 pair evidence. M3 alignment tests.                                |
 | Recording and synthesis           | Not part of the first release.                                                                                   | Examination of first-release features.                               |
-| Supplied sounds and example songs | Excluded. Users supply all samples.                                                                              | M2 distribution contains no samples or demo songs.                   |
+| Supplied sounds and example songs | Excluded. Users choose or import samples.                                                                        | M2 distribution contains no samples or demo songs.                   |
 | Help                              | Tooltips only. No help pages, command-reference panels or tutorials.                                             | M2 pointer and keyboard access to tooltips.                          |
 | Unspecified historical functions  | No inferred requirements for unidentified tools or formats.                                                      | Source review before a subsequent proposal for more features.        |
 
@@ -970,7 +970,7 @@ decision. It also measures a production-build prototype with representative
 material panels. M5 applies the combined workload again to the full application
 before a release performance claim.
 
-The two plan interviews are completed. The plan is split into twelve product
+The two plan interviews are completed. The plan is split into thirteen product
 specifications. Spec-001 includes the full styled main menu, themes and all
 project opening functions. These added features have user approval.
 
@@ -985,4 +985,9 @@ specification records completed checks and remaining evidence limits.
 
 The audio corpus and its criteria still need approval before M1 audio acceptance
 tests. Use M1 evidence for deferred selections before the full workspace
-implementation. This menu work does not approve another slice.
+implementation. Spec-001 approval does not approve another slice.
+
+On 2026-09-23, the user requested one-click OG archive sample import from the
+main menu. [Spec-013](specs/spec-013-import-og-archive.md) records this separate
+scope. The user tested the import and declared the slice complete. This approval
+does not extend to general sample preparation or other draft slices.

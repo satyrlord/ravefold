@@ -4,6 +4,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { test } from "node:test";
+import { MAX_WRITE_BYTES } from "../shared/native-protocol.ts";
 import {
   NativeFiles,
   type NativeHandle,
@@ -85,6 +86,42 @@ async function write(
   await native.dispatch({ op: "closeWriter", writer });
 }
 
+function wav(frames = 4): Buffer {
+  const dataBytes = frames * 2;
+  const bytes = Buffer.alloc(44 + dataBytes);
+  bytes.write("RIFF", 0);
+  bytes.writeUInt32LE(bytes.length - 8, 4);
+  bytes.write("WAVEfmt ", 8);
+  bytes.writeUInt32LE(16, 16);
+  bytes.writeUInt16LE(1, 20);
+  bytes.writeUInt16LE(1, 22);
+  bytes.writeUInt32LE(44_100, 24);
+  bytes.writeUInt32LE(88_200, 28);
+  bytes.writeUInt16LE(2, 32);
+  bytes.writeUInt16LE(16, 34);
+  bytes.write("data", 36);
+  bytes.writeUInt32LE(dataBytes, 40);
+  for (let index = 44; index < bytes.length; index++)
+    bytes[index] = index % 251;
+  return bytes;
+}
+
+async function writeAudio(
+  native: NativeFiles,
+  handle: NativeHandle,
+  bytes: Buffer,
+): Promise<void> {
+  const writer = await open(native, handle);
+  for (let offset = 0; offset < bytes.length; offset += MAX_WRITE_BYTES) {
+    await native.dispatch({
+      op: "writeBytes",
+      writer,
+      data: bytes.subarray(offset, offset + MAX_WRITE_BYTES).toString("base64"),
+    });
+  }
+  await native.dispatch({ op: "closeWriter", writer });
+}
+
 test("native grants expose names and opaque IDs, with no machine paths", async () => {
   await fixture(async ({ native, samples, sampleHandle }) => {
     assert.deepEqual(Object.keys(sampleHandle).sort(), ["id", "kind", "name"]);
@@ -125,7 +162,7 @@ test("native roots reject overlap and preserve the previous grant", async () => 
 });
 
 test("native RPC rejects malformed requests and all path traversal forms", async () => {
-  await fixture(async ({ native, sampleHandle }) => {
+  await fixture(async ({ native, sampleHandle, settingsHandle }) => {
     for (const value of [
       null,
       [],
@@ -164,7 +201,7 @@ test("native RPC rejects malformed requests and all path traversal forms", async
     await assert.rejects(
       native.dispatch({
         op: "getDirectory",
-        handle: sampleHandle.id,
+        handle: settingsHandle.id,
         name: "new",
         create: true,
       }),
@@ -456,7 +493,7 @@ test("native descendants resolve within their selected root", async () => {
   });
 });
 
-test("native sample audio remains byte-identical after all rejected mutation paths", async () => {
+test("native sample audio remains byte-identical after rejected mutation paths", async () => {
   await fixture(async ({ native, samples, sampleHandle }) => {
     const source = Buffer.from("RIFF----WAVEexisting-audio");
     const audio = path.join(samples, "sample.wav");
@@ -474,7 +511,7 @@ test("native sample audio remains byte-identical after all rejected mutation pat
       }),
       { name: "NotAllowedError" },
     );
-    await assert.rejects(file(native, sampleHandle, "new.wav", true), {
+    await assert.rejects(file(native, sampleHandle, "new.pxd", true), {
       name: "NotAllowedError",
     });
     await assert.rejects(
@@ -488,6 +525,191 @@ test("native sample audio remains byte-identical after all rejected mutation pat
       before,
     );
     assert.deepEqual(await fs.readdir(samples), ["sample.wav"]);
+  });
+});
+
+test("native host adds validated WAV files in new sample subfolders", async () => {
+  await fixture(async ({ native, samples, sampleHandle, settingsHandle }) => {
+    const archive = (await native.dispatch({
+      op: "getDirectory",
+      handle: sampleHandle.id,
+      name: "Archived",
+      create: true,
+    })) as NativeHandle;
+    const drums = (await native.dispatch({
+      op: "getDirectory",
+      handle: archive.id,
+      name: "Drums",
+      create: true,
+    })) as NativeHandle;
+    const again = (await native.dispatch({
+      op: "getDirectory",
+      handle: archive.id,
+      name: "Drums",
+      create: true,
+    })) as NativeHandle;
+    assert.equal(again.id, drums.id);
+    assert.deepEqual(
+      await native.dispatch({
+        op: "resolve",
+        handle: sampleHandle.id,
+        other: drums.id,
+      }),
+      ["Archived", "Drums"],
+    );
+    await assert.rejects(
+      native.dispatch({
+        op: "getDirectory",
+        handle: settingsHandle.id,
+        name: "Audio",
+        create: true,
+      }),
+      { name: "NotAllowedError" },
+    );
+    const contents = wav(150_000);
+    const handle = await file(native, drums, "kick.wav", true);
+    await writeAudio(native, handle, contents);
+    const target = path.join(samples, "Archived", "Drums", "kick.wav");
+    assert.equal(
+      createHash("sha256")
+        .update(await fs.readFile(target))
+        .digest("hex"),
+      createHash("sha256").update(contents).digest("hex"),
+    );
+    assert.deepEqual(await fs.readdir(samples), ["Archived"]);
+    assert.deepEqual(await fs.readdir(path.dirname(target)), ["kick.wav"]);
+    await assert.rejects(open(native, handle), { name: "NotAllowedError" });
+    await assert.rejects(
+      native.dispatch({ op: "remove", handle: drums.id, name: "kick.wav" }),
+      { name: "NotAllowedError" },
+    );
+  });
+});
+
+test("native WAV writes preserve collisions and allow a new name on retry", async () => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const original = wav(8);
+    const occupied = path.join(samples, "occupied.wav");
+    await fs.writeFile(occupied, original);
+    const existing = await file(native, sampleHandle, "occupied.wav", true);
+    await assert.rejects(open(native, existing), { name: "NotAllowedError" });
+
+    const race = await file(native, sampleHandle, "race.wav", true);
+    const writer = await open(native, race);
+    await native.dispatch({
+      op: "writeBytes",
+      writer,
+      data: wav(12).toString("base64"),
+    });
+    const external = wav(16);
+    await fs.writeFile(path.join(samples, "race.wav"), external);
+    await assert.rejects(native.dispatch({ op: "closeWriter", writer }), {
+      name: "InvalidModificationError",
+    });
+    assert.deepEqual(await fs.readFile(occupied), original);
+    assert.deepEqual(
+      await fs.readFile(path.join(samples, "race.wav")),
+      external,
+    );
+    assert.deepEqual((await fs.readdir(samples)).sort(), [
+      "occupied.wav",
+      "race.wav",
+    ]);
+
+    const retry = await file(native, sampleHandle, "retry.wav", true);
+    await writeAudio(native, retry, original);
+    assert.deepEqual(
+      await fs.readFile(path.join(samples, "retry.wav")),
+      original,
+    );
+  });
+});
+
+test("native WAV writers reject invalid chunks and invalid audio without output", async () => {
+  await fixture(async ({ native, samples, sampleHandle, settingsHandle }) => {
+    await assert.rejects(file(native, settingsHandle, "audio.wav", true), {
+      name: "NotAllowedError",
+    });
+    const handle = await file(native, sampleHandle, "invalid.wav", true);
+    const writer = await open(native, handle);
+    for (const data of ["@@@", "Zg=", "A".repeat(400_000)]) {
+      await assert.rejects(
+        native.dispatch({ op: "writeBytes", writer, data }),
+        {
+          name: "TypeError",
+        },
+      );
+    }
+    await assert.rejects(
+      native.dispatch({ op: "write", writer, data: "RIFF" }),
+      { name: "NotAllowedError" },
+    );
+    await native.dispatch({
+      op: "writeBytes",
+      writer,
+      data: Buffer.from("RIFF----WAVEnot-a-valid-file").toString("base64"),
+    });
+    await assert.rejects(native.dispatch({ op: "closeWriter", writer }), {
+      name: "TypeError",
+    });
+    assert.deepEqual(await fs.readdir(samples), []);
+    await writeAudio(native, handle, wav());
+    assert.deepEqual(await fs.readdir(samples), ["invalid.wav"]);
+    const later = await file(native, sampleHandle, "aborted.wav", true);
+    const aborted = await open(native, later);
+    await native.dispatch({
+      op: "writeBytes",
+      writer: aborted,
+      data: wav().toString("base64"),
+    });
+    await native.dispatch({ op: "abortWriter", writer: aborted });
+    assert.deepEqual(await fs.readdir(samples), ["invalid.wav"]);
+  });
+});
+
+test("native grant replacement removes an unfinished WAV stage", async () => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const handle = await file(native, sampleHandle, "unfinished.wav", true);
+    const writer = await open(native, handle);
+    await native.dispatch({
+      op: "writeBytes",
+      writer,
+      data: wav().toString("base64"),
+    });
+    await native.selectRoot("samples", samples);
+    assert.deepEqual(await fs.readdir(samples), []);
+    await assert.rejects(native.dispatch({ op: "closeWriter", writer }), {
+      name: "InvalidStateError",
+    });
+  });
+});
+
+test("native lookup ignores an aborted pending WAV and permits retry", async () => {
+  await fixture(async ({ native, samples, sampleHandle }) => {
+    const pending = await file(native, sampleHandle, "retry.wav", true);
+    const writer = await open(native, pending);
+    await native.dispatch({
+      op: "writeBytes",
+      writer,
+      data: wav().toString("base64"),
+    });
+    await native.dispatch({ op: "abortWriter", writer });
+    assert.deepEqual(await fs.readdir(samples), []);
+    await assert.rejects(file(native, sampleHandle, "retry.wav"), {
+      name: "NotFoundError",
+    });
+    const retry = await file(native, sampleHandle, "retry.wav", true);
+    assert.equal(retry.id, pending.id);
+    const contents = wav(10);
+    await writeAudio(native, retry, contents);
+    assert.deepEqual(
+      await fs.readFile(path.join(samples, "retry.wav")),
+      contents,
+    );
+    assert.equal(
+      (await file(native, sampleHandle, "retry.wav")).id,
+      pending.id,
+    );
   });
 });
 

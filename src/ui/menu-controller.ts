@@ -42,6 +42,7 @@ import {
 import { readRecoveryCandidates } from "../storage/recovery.ts";
 import { resolveMissingSamples } from "../storage/missing.ts";
 import { validateWav } from "../domain/wav.ts";
+import { importArchiveSamples, listArchiveMembers } from "../archive/import.ts";
 
 export interface FolderState {
   handle?: DirectoryHandle;
@@ -59,6 +60,25 @@ export interface RecoveryChoice {
   name: string;
   project: Project;
 }
+export interface ArchiveState {
+  status:
+    | "idle"
+    | "choosing"
+    | "listing"
+    | "importing"
+    | "checking"
+    | "complete"
+    | "error"
+    | "cancelled";
+  completed: number;
+  total: number;
+  message: string;
+}
+export function archiveBusy(state: ArchiveState): boolean {
+  return ["choosing", "listing", "importing", "checking"].includes(
+    state.status,
+  );
+}
 export interface MenuState {
   appearance: Appearance;
   samples: FolderState;
@@ -73,6 +93,7 @@ export interface MenuState {
   entering: boolean;
   entry?: EntryResult;
   supported: boolean;
+  archive: ArchiveState;
 }
 const emptyFolder = (): FolderState => ({
   status: "empty",
@@ -100,6 +121,7 @@ export class MenuController {
   private started = false;
   private onEntry: (entry: EntryResult) => void;
   private entryTask?: AbortController;
+  private archiveTask?: AbortController;
 
   constructor(reducedMotion: boolean, onEntry: (entry: EntryResult) => void) {
     this.onEntry = onEntry;
@@ -117,6 +139,7 @@ export class MenuController {
       projectBusy: false,
       entering: false,
       supported: pickerAvailable(),
+      archive: { status: "idle", completed: 0, total: 0, message: "" },
     };
   }
   getSnapshot = () => this.state;
@@ -167,10 +190,12 @@ export class MenuController {
     this.tasks.settings?.abort();
     this.settingsTask.abort();
     this.entryTask?.abort();
+    this.archiveTask?.abort();
     this.listeners.clear();
   }
 
   async selectFolder(kind: FolderKind) {
+    if (kind === "samples") this.cancelArchive();
     const sequence = ++this.selections[kind];
     try {
       const handle = await pickFolder(kind);
@@ -197,6 +222,7 @@ export class MenuController {
     }
   }
   async retry(kind: FolderKind) {
+    if (kind === "samples") this.cancelArchive();
     const handle = this.state[kind].handle;
     if (!handle) return this.selectFolder(kind);
     const sequence = ++this.selections[kind];
@@ -245,6 +271,142 @@ export class MenuController {
       status: this.state[kind].discovery?.files.length ? "ready" : "error",
       message: "Folder check stopped. Retry to complete the check.",
     });
+  }
+
+  async importArchive() {
+    if (archiveBusy(this.state.archive)) return;
+    const task = new AbortController();
+    this.archiveTask = task;
+    let handle = this.state.samples.handle;
+    let newSelection = false;
+    this.update({
+      archive: {
+        status: "choosing",
+        completed: 0,
+        total: 0,
+        message: handle
+          ? "Checking Samples folder access."
+          : "Choose a folder for the WAV samples.",
+      },
+    });
+    try {
+      if (!handle) {
+        handle = await pickFolder("samples");
+        newSelection = true;
+      }
+      task.signal.throwIfAborted();
+      if ((await permission(handle, true)) !== "granted")
+        throw new Error("Read and write permission is required.");
+      const settings = this.state.settings.handle;
+      if (settings && !(await checkFolderSeparation(handle, settings)))
+        throw new Error("Select separate sample and settings folders.");
+      await probeWriteAccess(handle, task.signal);
+      task.signal.throwIfAborted();
+      if (newSelection) {
+        this.selections.samples++;
+        this.tasks.samples?.abort();
+        this.entryTask?.abort();
+        this.folder("samples", {
+          handle,
+          status: "checking",
+          scanning: false,
+          accessDenied: false,
+          discovery: undefined,
+          message: "Importing archive samples.",
+        });
+        this.update({ entry: undefined });
+      }
+      this.update({
+        archive: {
+          status: "listing",
+          completed: 0,
+          total: 0,
+          message: "Reading the ISO file list.",
+        },
+      });
+      const members = await listArchiveMembers(task.signal);
+      task.signal.throwIfAborted();
+      this.update({
+        archive: {
+          status: "importing",
+          completed: 0,
+          total: members.length,
+          message: `Downloading and converting 0 of ${members.length} samples.`,
+        },
+      });
+      await importArchiveSamples(handle, members, task.signal, (progress) => {
+        if (task.signal.aborted) return;
+        this.update({
+          archive: {
+            status: "importing",
+            ...progress,
+            message: `Downloading and converting ${progress.completed} of ${progress.total} samples.`,
+          },
+        });
+      });
+      task.signal.throwIfAborted();
+      this.update({
+        archive: {
+          status: "checking",
+          completed: members.length,
+          total: members.length,
+          message: "Checking the new WAV sample folder.",
+        },
+      });
+      await this.check("samples", handle);
+      task.signal.throwIfAborted();
+      if (
+        this.state.samples.handle !== handle ||
+        this.state.samples.status !== "ready"
+      )
+        throw new Error("The new sample folder could not be validated.");
+      this.update({
+        archive: {
+          status: "complete",
+          completed: members.length,
+          total: members.length,
+          message: `${members.length} WAV sample${members.length === 1 ? " is" : "s are"} ready in ${handle.name}/Rave eJay ISO.`,
+        },
+      });
+    } catch (error) {
+      if (task.signal.aborted || isCancellation(error)) {
+        if (newSelection && handle === this.state.samples.handle)
+          this.folder("samples", {
+            status: "error",
+            scanning: false,
+            message: "Archive import stopped. Retry the import.",
+          });
+        this.update({
+          archive: {
+            ...this.state.archive,
+            status: "cancelled",
+            message:
+              !task.signal.aborted && this.state.archive.status === "choosing"
+                ? "Folder selection cancelled."
+                : "Import stopped. Files already added remain in the Samples folder.",
+          },
+        });
+      } else {
+        if (newSelection && handle === this.state.samples.handle)
+          this.folder("samples", {
+            status: "error",
+            message: "Archive import did not complete. Retry the import.",
+          });
+        this.update({
+          archive: {
+            ...this.state.archive,
+            status: "error",
+            message: `${error instanceof TypeError && /fetch/iu.test(error.message) ? "The archive could not be reached" : error instanceof Error ? error.message.replace(/[.!?]+$/u, "") : "Archive import failed"}. Retry the import. Files already added remain in the Samples folder.`,
+          },
+        });
+      }
+    } finally {
+      if (this.archiveTask === task) this.archiveTask = undefined;
+    }
+  }
+
+  cancelArchive() {
+    this.archiveTask?.abort();
   }
   private async check(kind: FolderKind, handle: DirectoryHandle) {
     this.entryTask?.abort();
@@ -548,7 +710,8 @@ export class MenuController {
       !this.state.pending ||
       this.state.samples.status !== "ready" ||
       this.state.settings.status !== "ready" ||
-      this.state.projectBusy
+      this.state.projectBusy ||
+      archiveBusy(this.state.archive)
     )
       return;
     const { pending, samples, settings } = this.state;

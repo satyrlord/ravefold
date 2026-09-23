@@ -126,6 +126,10 @@ The menu has a maximum width of 1160px. Its two columns use a 1.65:1 ratio, with
 a minimum width of 320px for the appearance column. Panel gaps use the spacing
 tokens. The main shell has 38px vertical separation and 5vw horizontal padding.
 
+The right column places archive import below Appearance. Its action stays
+visible before folder setup. File-count progress, stop control and status appear
+in this panel during import. Completion uses the success text color.
+
 At 860px or less, panels form one column with a maximum width of 660px. The
 shell padding becomes 24px. The skin selector changes from three columns to six
 columns. At 540px or less, it returns to three columns. Panel padding becomes

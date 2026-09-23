@@ -29,8 +29,15 @@ each clip. A skin is a set of interface appearance settings.
 - The application name is RaveFold.
 - RaveFold does not import OG project files. Compatibility with those projects
   is not a product feature. This limit applies to all future releases.
-- RaveFold supplies no samples to users. Users select their own sample folder in
-  a setup window.
+- RaveFold contains no sample audio. Users select their own sample folder in a
+  setup window.
+- The main menu has an OG archive import action. It converts PXD files from the
+  external ISO into WAV files in the selected Samples folder.
+- The archive action is available before folder setup. It lets users select an
+  empty writable folder when no Samples folder is selected.
+- The action shows import progress. It reports completion only after it
+  validates the resulting sample folder. It does not change existing audio
+  files.
 - A valid sample folder and a writable settings folder are necessary before the
   main view opens. The user stays in the main menu until the two folder
   requirements pass.

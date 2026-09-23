@@ -10,6 +10,7 @@ import {
   NATIVE_CHANNEL as channel,
   NATIVE_VERSION as version,
   MAX_READ_BYTES as chunkBytes,
+  MAX_WRITE_BYTES as writeChunkBytes,
   type NativeHandle as HandleDescriptor,
   type NativeFileInfo as FileSnapshot,
   type NativeOperation,
@@ -51,6 +52,108 @@ function protocolError(): Error {
 
 function emptyResult(value: unknown): void {
   if (value !== null && value !== undefined) throw protocolError();
+}
+
+function encodeBytes(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  for (let offset = 0; offset < bytes.length; offset += 16_384) {
+    parts.push(String.fromCharCode(...bytes.subarray(offset, offset + 16_384)));
+  }
+  return btoa(parts.join(""));
+}
+
+async function writeAudio(
+  bridge: NativeBridge,
+  writer: string,
+  data: Blob | ArrayBuffer | ArrayBufferView,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (data instanceof Blob) {
+    for (let offset = 0; offset < data.size; offset += writeChunkBytes) {
+      signal?.throwIfAborted();
+      const bytes = new Uint8Array(
+        await data.slice(offset, offset + writeChunkBytes).arrayBuffer(),
+      );
+      signal?.throwIfAborted();
+      emptyResult(
+        await bridge.request({
+          op: "writeBytes",
+          writer,
+          data: encodeBytes(bytes),
+        }),
+      );
+    }
+    signal?.throwIfAborted();
+    return;
+  }
+  const bytes =
+    data instanceof ArrayBuffer
+      ? new Uint8Array(data)
+      : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  for (let offset = 0; offset < bytes.length; offset += writeChunkBytes) {
+    signal?.throwIfAborted();
+    emptyResult(
+      await bridge.request({
+        op: "writeBytes",
+        writer,
+        data: encodeBytes(bytes.subarray(offset, offset + writeChunkBytes)),
+      }),
+    );
+  }
+  signal?.throwIfAborted();
+}
+
+function audioWritable(bridge: NativeBridge, writer: string): WritableHandle {
+  let closed = false;
+  let failed: unknown;
+  let pending: Promise<void> = Promise.resolve();
+  return {
+    write(data, signal) {
+      if (closed)
+        return Promise.reject(
+          new DOMException("The audio writer is closed.", "InvalidStateError"),
+        );
+      if (
+        typeof data === "string" ||
+        (!(data instanceof Blob) &&
+          !(data instanceof ArrayBuffer) &&
+          !ArrayBuffer.isView(data))
+      )
+        return Promise.reject(
+          new TypeError("A WAV write requires binary data."),
+        );
+      const next = pending.then(async () => {
+        if (failed) throw failed;
+        await writeAudio(bridge, writer, data, signal);
+      });
+      pending = next.catch((error: unknown) => {
+        failed = error;
+      });
+      return next;
+    },
+    async close() {
+      if (closed)
+        throw new DOMException(
+          "The audio writer is closed.",
+          "InvalidStateError",
+        );
+      closed = true;
+      await pending;
+      if (failed) {
+        await bridge
+          .request({ op: "abortWriter", writer })
+          .catch(() => undefined);
+        throw failed;
+      }
+      emptyResult(await bridge.request({ op: "closeWriter", writer }));
+    },
+    async abort() {
+      if (closed) return;
+      closed = true;
+      await pending;
+      emptyResult(await bridge.request({ op: "abortWriter", writer }));
+    },
+  };
 }
 
 function descriptor(value: unknown): HandleDescriptor {
@@ -415,13 +518,21 @@ class NativeFileHandle extends NativeHandle implements FileHandle {
     mode?: "exclusive" | "siloed";
   }): Promise<WritableHandle> {
     if (options?.keepExistingData)
-      throw new Error("This host supports complete metadata writes only.");
+      throw new Error("This host supports complete file writes only.");
     const value = await this.bridge.request({
       op: "openWriter",
       handle: this.id,
     });
-    if (!record(value) || !nonemptyString(value.writer)) throw protocolError();
+    if (
+      !record(value) ||
+      !nonemptyString(value.writer) ||
+      (value.kind !== undefined &&
+        value.kind !== "audio" &&
+        value.kind !== "metadata")
+    )
+      throw protocolError();
     const writer = value.writer;
+    if (value.kind === "audio") return audioWritable(this.bridge, writer);
     let closed = false;
     return {
       write: async (data) => {

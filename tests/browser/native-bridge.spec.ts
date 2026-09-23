@@ -13,6 +13,90 @@ import { extensionHarness } from "../extension-harness.ts";
 import { projectFixture } from "../fixtures.ts";
 import type { EntryResult } from "../../src/domain/entry.ts";
 
+test("the built native view imports the ISO members into an empty Samples folder", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const parent = resolve("tmp");
+  await mkdir(parent, { recursive: true });
+  const root = await mkdtemp(join(parent, "native-archive-"));
+  const samples = join(root, "samples");
+  await mkdir(samples);
+  const pxd = Buffer.alloc(5 + 7 + 7 + 2);
+  pxd.write("tPxD", 0, "ascii");
+  pxd[4] = 7;
+  pxd.write("Sample\0", 5, "ascii");
+  pxd[12] = 0x54;
+  pxd.writeUInt32LE(2, 13);
+  pxd[19] = 0x81;
+  pxd[20] = 0x80;
+  const member =
+    "https://archive.org/download/raveejay_202005/raveejay.iso/RAVE%2FAA%2FTEST.PXD";
+  const host = await extensionHarness({ built: true });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await host.command("ravefold.open");
+    expect(host.html()).toContain("https://*.archive.org");
+    await page.route("http://127.0.0.1:4173/", (route) =>
+      route.fulfill({ contentType: "text/html", body: host.html() }),
+    );
+    await page.route(
+      "https://archive.org/download/raveejay_202005/raveejay.iso/",
+      (route) =>
+        route.fulfill({
+          contentType: "text/html",
+          headers: { "access-control-allow-origin": "*" },
+          body: `<html><table><tr><td><a href="${member}">RAVE/AA/TEST.PXD</a></td><td></td><td id="size">${pxd.length}</td></tr></table></html>`,
+        }),
+    );
+    await page.route(member, (route) =>
+      route.fulfill({
+        contentType: "application/octet-stream",
+        headers: { "access-control-allow-origin": "*" },
+        body: pxd,
+      }),
+    );
+    await page.exposeBinding(
+      "nativeFixtureRequest",
+      async (_source, message: unknown) => host.send(message),
+    );
+    await page.addInitScript(() => {
+      const scope = window as unknown as {
+        acquireVsCodeApi: () => unknown;
+        nativeFixtureRequest: (message: unknown) => Promise<unknown>;
+      };
+      scope.acquireVsCodeApi = () => ({
+        postMessage: (message: unknown) => {
+          void scope
+            .nativeFixtureRequest(message)
+            .then((reply) =>
+              window.dispatchEvent(
+                new MessageEvent("message", { data: reply }),
+              ),
+            );
+        },
+      });
+    });
+    host.pickerPaths.push(samples);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Import Rave eJay ISO" }).click();
+    await expect(
+      page.getByRole("status").filter({ hasText: "1 WAV sample is ready" }),
+    ).toBeVisible();
+    const wav = await readFile(
+      join(samples, "Rave eJay ISO", "RAVE", "AA", "TEST.wav"),
+    );
+    expect(wav.subarray(0, 4).toString("ascii")).toBe("RIFF");
+    expect(await readdir(samples)).toEqual(["Rave eJay ISO"]);
+    expect(errors).toEqual([]);
+  } finally {
+    host.dispose();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("the built native extension supports folder setup, reload, entry and revocation without audio changes", async ({
   page,
 }) => {

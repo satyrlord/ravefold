@@ -32,17 +32,23 @@ The adapter does not store audio, project data or settings values in browser or
 extension storage. File reads use versioned ranges of at most 256 KiB. A changed
 file invalidates the earlier read snapshot.
 
-This slice permits only two forms of native write: new access manifests and
-validated application settings. The host checks the operation and content. It
-must reject audio writes, arbitrary file writes and arbitrary deletion. Only
-this session's unchanged access manifests can be removed. Failed settings writes
-keep the previous valid file.
+This slice permits new access manifests, validated application settings and new
+WAV samples in the selected Samples folder. The host can create subfolders only
+inside that folder. It rejects changes to existing audio, arbitrary file writes
+and arbitrary deletion. Only this session's unchanged access manifests can be
+removed. Failed settings writes keep the previous valid file.
 
 The host stages metadata in the selected folder and commits it atomically. An
 atomic commit changes the complete file in one operation. Identity and version
 checks detect ordinary external changes. These checks are not an
 operating-system lock against a hostile local process that changes files at the
 same time.
+
+New WAV writes use Base64 messages with at most 256 KiB of decoded data. Base64
+is a text encoding for binary data. The host stages each WAV in Samples and
+validates its format before the final add. The final add fails if the name
+exists. Failed or canceled writes remove the stage file. The host never replaces
+an existing WAV.
 
 ## Message contract
 

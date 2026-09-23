@@ -89,7 +89,7 @@ async function webviewHtml(
       return `${attribute}="${escapeAttribute(webview.asWebviewUri(vscode.Uri.joinPath(webRoot, path)).toString())}"`;
     },
   );
-  const policy = `default-src 'none'; script-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data: blob:; connect-src ${webview.cspSource}; worker-src ${webview.cspSource} blob:; base-uri 'none'; form-action 'none'`;
+  const policy = `default-src 'none'; script-src ${webview.cspSource}; style-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource}; img-src ${webview.cspSource} data: blob:; connect-src ${webview.cspSource} https://archive.org https://*.archive.org; worker-src ${webview.cspSource} blob:; base-uri 'none'; form-action 'none'`;
   return html
     .replace('<html lang="en">', '<html lang="en" data-ravefold-native="1">')
     .replace(

@@ -16,6 +16,7 @@ export interface FixtureOptions {
 export interface FixtureSnapshot {
   entries: Array<Omit<EntryResult, "samples" | "settings">>;
   audio: Array<{ path: string; hash: string }>;
+  selectedAudio: Array<{ path: string; hash: string }>;
   writes: Array<{ path: string; contents: string }>;
   removals: string[];
   settings: string | null;
@@ -30,6 +31,10 @@ export interface FixtureControls {
   ): void;
   failSettingsWrite(value: boolean): void;
   releaseSlow(): void;
+  blockAudioWrite(): void;
+  audioWriteStarted(): boolean;
+  releaseAudioWrite(): void;
+  changeSelectedAudio(path: string): void;
   snapshot(): Promise<FixtureSnapshot>;
 }
 
@@ -51,6 +56,10 @@ export async function installFixtureFS(
     const selection: SampleFixture[] = [];
     const cancelled = new Set<string>();
     let failSettings = false;
+    let holdAudioWrite = false;
+    let audioWriteStarted = false;
+    let releaseAudioWrite = () => {};
+    let audioWriteGate: Promise<void> = Promise.resolve();
     let releaseSlow = () => {};
     const slow = new Promise<void>((resolve) => {
       releaseSlow = resolve;
@@ -62,6 +71,7 @@ export async function installFixtureFS(
       name: string;
       path: string;
       bytes: Uint8Array<ArrayBuffer>;
+      modified = Date.now();
       constructor(name: string, path: string, bytes: Uint8Array<ArrayBuffer>) {
         this.name = name;
         this.path = path;
@@ -71,21 +81,41 @@ export async function installFixtureFS(
         return this === other;
       }
       async getFile() {
-        return new File([this.bytes], this.name);
+        return new File([this.bytes], this.name, {
+          lastModified: this.modified,
+        });
       }
       async createWritable(): Promise<WritableHandle> {
         let pending: Uint8Array<ArrayBuffer> = new Uint8Array(0);
         return {
           write: async (value) => {
-            if (typeof value !== "string")
-              throw new Error("The test expects JSON writes only.");
-            pending = textEncoder.encode(value);
-            writes.push({ path: this.path, contents: value });
+            if (typeof value !== "string" && holdAudioWrite) {
+              audioWriteStarted = true;
+              await audioWriteGate;
+            }
+            if (typeof value === "string") {
+              pending = textEncoder.encode(value);
+              writes.push({ path: this.path, contents: value });
+            } else if (value instanceof Blob) {
+              pending = new Uint8Array(await value.arrayBuffer());
+            } else if (ArrayBuffer.isView(value)) {
+              pending = new Uint8Array(value.byteLength);
+              pending.set(
+                new Uint8Array(
+                  value.buffer,
+                  value.byteOffset,
+                  value.byteLength,
+                ),
+              );
+            } else {
+              pending = new Uint8Array(value);
+            }
           },
           close: async () => {
             if (failSettings && this.name === "ravefold-settings.json")
               throw new DOMException("Write denied.", "NotAllowedError");
             this.bytes = pending;
+            this.modified = Date.now();
           },
           abort: async () => {},
         };
@@ -122,11 +152,14 @@ export async function installFixtureFS(
           throw new DOMException("Missing file.", "NotFoundError");
         return this.file(name, "");
       }
-      async getDirectoryHandle(name: string) {
+      async getDirectoryHandle(name: string, options?: { create?: boolean }) {
         if (this.state !== "granted")
           throw new DOMException("Access denied.", "NotAllowedError");
         const existing = this.children.get(name);
         if (existing?.kind === "directory") return existing;
+        if (existing)
+          throw new DOMException("Not a directory.", "TypeMismatchError");
+        if (options?.create) return this.folder(name);
         throw new DOMException("Missing folder.", "NotFoundError");
       }
       async *entries(): AsyncIterableIterator<
@@ -235,6 +268,22 @@ export async function installFixtureFS(
         child.kind === "file" ? [child] : allFiles(child),
       );
     }
+    async function audioIn(directory: MemoryDirectory) {
+      return Promise.all(
+        allFiles(directory)
+          .filter((file) => file.name.toLowerCase().endsWith(".wav"))
+          .map(async (file) => ({
+            path: file.path,
+            hash: [
+              ...new Uint8Array(
+                await crypto.subtle.digest("SHA-256", file.bytes),
+              ),
+            ]
+              .map((byte) => byte.toString(16).padStart(2, "0"))
+              .join(""),
+          })),
+      );
+    }
     window.fixtureFS = {
       queueSample: (kind) => selection.push(kind),
       cancelPicker: (kind) => {
@@ -247,24 +296,40 @@ export async function installFixtureFS(
         failSettings = value;
       },
       releaseSlow,
+      blockAudioWrite: () => {
+        holdAudioWrite = true;
+        audioWriteStarted = false;
+        audioWriteGate = new Promise<void>((resolve) => {
+          releaseAudioWrite = resolve;
+        });
+      },
+      audioWriteStarted: () => audioWriteStarted,
+      releaseAudioWrite: () => {
+        holdAudioWrite = false;
+        releaseAudioWrite();
+      },
+      changeSelectedAudio: (path) => {
+        const parts = path.split("/");
+        let folder = selectedSamples;
+        for (const name of parts.slice(0, -1)) {
+          const child = folder.children.get(name);
+          if (child?.kind !== "directory")
+            throw new Error("Missing test folder.");
+          folder = child;
+        }
+        const file = folder.children.get(parts.at(-1)!);
+        if (file?.kind !== "file" || file.bytes.length <= 44)
+          throw new Error("Missing test WAV file.");
+        file.bytes = file.bytes.slice();
+        file.bytes[44] ^= 1;
+        file.modified++;
+      },
       snapshot: async () => ({
         entries,
         writes,
         removals,
-        audio: await Promise.all(
-          allFiles(samples)
-            .filter((file) => file.name.endsWith(".wav"))
-            .map(async (file) => ({
-              path: file.path,
-              hash: [
-                ...new Uint8Array(
-                  await crypto.subtle.digest("SHA-256", file.bytes),
-                ),
-              ]
-                .map((byte) => byte.toString(16).padStart(2, "0"))
-                .join(""),
-            })),
-        ),
+        audio: await audioIn(samples),
+        selectedAudio: await audioIn(selectedSamples),
         settings:
           settings.children.get("ravefold-settings.json")?.kind === "file"
             ? textDecoder.decode(

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   MAX_READ_BYTES,
+  MAX_WRITE_BYTES,
   NATIVE_CHANNEL,
   NATIVE_VERSION,
   isNativeRequest,
@@ -275,6 +276,113 @@ test("native writes reject binary data and keep writer close or abort explicit",
     assert.deepEqual(
       host.requests.map(({ request }) => request.op),
       ["openWriter", "write", "abortWriter"],
+    );
+  } finally {
+    bridge.dispose();
+  }
+});
+
+test("native audio writes send bounded binary chunks for Blob and buffer views", async () => {
+  const chunks: Buffer[] = [];
+  const host = new HostFixture((request) => {
+    if (request.op === "openWriter")
+      return { writer: "audio-writer", kind: "audio" };
+    if (request.op === "writeBytes") {
+      const bytes = Buffer.from(request.data, "base64");
+      assert.ok(bytes.length > 0 && bytes.length <= MAX_WRITE_BYTES);
+      chunks.push(bytes);
+    }
+    return null;
+  });
+  const bridge = new NativeBridge(host, host);
+  try {
+    const handle = bridge.handle({
+      id: "audio",
+      name: "new.wav",
+      kind: "file",
+    });
+    if (handle.kind !== "file") throw new Error("Expected a file.");
+    const writer = await handle.createWritable({ mode: "exclusive" });
+    const large = Uint8Array.from(
+      { length: MAX_WRITE_BYTES * 2 + 17 },
+      (_, index) => index % 251,
+    );
+    await assert.rejects(writer.write("RIFF"), /binary data/);
+    await writer.write(new Blob([large]));
+    await writer.write(large.buffer.slice(2, 9));
+    await writer.write(new DataView(large.buffer, 20, 11));
+    await writer.close();
+    await assert.rejects(writer.write(large), { name: "InvalidStateError" });
+    assert.deepEqual(
+      Buffer.concat(chunks),
+      Buffer.concat([
+        Buffer.from(large),
+        Buffer.from(large.subarray(2, 9)),
+        Buffer.from(large.subarray(20, 31)),
+      ]),
+    );
+    assert.equal(chunks.length, 5);
+    assert.equal(host.requests.at(-1)?.request.op, "closeWriter");
+  } finally {
+    bridge.dispose();
+  }
+});
+
+test("native audio write failure aborts the writer before close", async () => {
+  const host = new HostFixture((request) => {
+    if (request.op === "openWriter")
+      return { writer: "audio-writer", kind: "audio" };
+    if (request.op === "writeBytes")
+      throw new DOMException("The write failed.", "NotReadableError");
+    return null;
+  });
+  const bridge = new NativeBridge(host, host);
+  try {
+    const handle = bridge.handle({
+      id: "audio",
+      name: "new.wav",
+      kind: "file",
+    });
+    if (handle.kind !== "file") throw new Error("Expected a file.");
+    const writer = await handle.createWritable();
+    await assert.rejects(writer.write(new Uint8Array([1])), {
+      name: "NotReadableError",
+    });
+    await assert.rejects(writer.close(), { name: "NotReadableError" });
+    assert.deepEqual(
+      host.requests.map(({ request }) => request.op),
+      ["openWriter", "writeBytes", "abortWriter"],
+    );
+  } finally {
+    bridge.dispose();
+  }
+});
+
+test("native audio writes stop before the next chunk after cancellation", async () => {
+  const task = new AbortController();
+  const host = new HostFixture((request) => {
+    if (request.op === "openWriter")
+      return { writer: "audio-writer", kind: "audio" };
+    if (request.op === "writeBytes") task.abort();
+    return null;
+  });
+  const bridge = new NativeBridge(host, host);
+  try {
+    const handle = bridge.handle({
+      id: "audio",
+      name: "new.wav",
+      kind: "file",
+    });
+    if (handle.kind !== "file") throw new Error("Expected a file.");
+    const writer = await handle.createWritable();
+    await assert.rejects(
+      writer.write(new Uint8Array(MAX_WRITE_BYTES * 2), task.signal),
+      { name: "AbortError" },
+    );
+    await writer.abort();
+    assert.deepEqual(
+      host.requests.map(({ request }) => request.op),
+      ["openWriter", "writeBytes", "abortWriter"],
     );
   } finally {
     bridge.dispose();

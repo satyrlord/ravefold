@@ -46,7 +46,7 @@ belong to [010](spec-010-recover-work.md). Tracker appearance checks belong to
 - The browser stores only folder-access references. Permission applies after the
   application starts again. Settings values stay in the selected settings
   folder.
-- Setup does not delete or change audio. The app includes no samples.
+- Setup does not delete or change audio. The app includes no bundled samples.
 - Cancellation, denied access and missing capabilities leave the main menu
   usable.
 - Tooltips are the only help. Setup labels and status messages stay available.
@@ -133,8 +133,9 @@ selection in memory. Validate the two folders again before entry. Do not mount
 the tracker or start an audio engine while the user is in the menu.
 
 Do not copy the demo's documentation page, component gallery or developer
-controls. Do not add accounts, sample downloads, help pages, tutorials or
-decorative audio playback. All menu actions that the user can see must operate.
+controls. Do not add accounts, help pages, tutorials or decorative audio
+playback. [Spec-013](spec-013-import-og-archive.md) owns the OG archive action.
+All menu actions that the user can see must operate.
 
 ## Full appearance support
 
@@ -349,6 +350,6 @@ follows the M1 decision process.
 
 ## Out of scope
 
-No tracker editing, sample audition, conversion, manual project saving, recovery
-generation or song rendering. Project and recovery selection before entry are in
-scope. No subsequent specification interview is part of this session.
+No tracker editing, sample audition, general sample preparation, manual project
+saving, recovery generation or song rendering. Spec-013 owns PXD conversion for
+archive import. Project and recovery selection before entry are in scope.

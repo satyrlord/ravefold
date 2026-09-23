@@ -7,6 +7,7 @@ import { MaterialRoot, MaterialSurface } from "../skins/MaterialRoot.tsx";
 import type { RendererState } from "../skins/MaterialRoot.tsx";
 import { SKINS } from "../skins/registry.ts";
 import { MenuController } from "./menu-controller.ts";
+import { archiveBusy } from "./menu-controller.ts";
 import type { FolderState } from "./menu-controller.ts";
 import { Button, Icon, Modal } from "./controls.tsx";
 import "./menu.css";
@@ -46,6 +47,7 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
   }, [controller]);
   const allReady =
     state.samples.status === "ready" && state.settings.status === "ready";
+  const importingArchive = archiveBusy(state.archive);
   const folderSummary = (folder: FolderState) =>
     folder.handle?.name ?? "Not selected";
   const setAppearance = <K extends keyof Appearance>(
@@ -161,6 +163,7 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
                         !allReady ||
                         state.entering ||
                         state.projectBusy ||
+                        importingArchive ||
                         Boolean(state.entry)
                       }
                       tip="Check folder access and open the selected project."
@@ -268,93 +271,139 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
               )}
             </MaterialSurface>
           </div>
-          <MaterialSurface
-            as="aside"
-            className="appearance-panel"
-            aria-labelledby="appearance-heading"
-          >
-            <h2 id="appearance-heading">Appearance</h2>
-            <div className="skin-grid" role="radiogroup" aria-label="Skin">
-              {SKINS.map((skin, index) => (
-                <button
-                  key={skin.id}
-                  type="button"
-                  className="skin-option"
-                  role="radio"
-                  aria-label={skin.label}
-                  aria-checked={state.appearance.skin === skin.id}
-                  tabIndex={state.appearance.skin === skin.id ? 0 : -1}
-                  onClick={() => setAppearance("skin", skin.id)}
-                  onKeyDown={(event) => {
-                    const offset =
-                      event.key === "ArrowRight" || event.key === "ArrowDown"
-                        ? 1
-                        : event.key === "ArrowLeft" || event.key === "ArrowUp"
-                          ? -1
-                          : 0;
-                    if (offset) {
-                      event.preventDefault();
-                      const next =
-                        (index + offset + SKINS.length) % SKINS.length;
-                      setAppearance("skin", SKINS[next]!.id);
-                      const elements =
-                        event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
-                          '[role="radio"]',
-                        );
-                      elements?.[next]?.focus();
+          <div className="appearance-column">
+            <MaterialSurface
+              as="aside"
+              className="appearance-panel"
+              aria-labelledby="appearance-heading"
+            >
+              <h2 id="appearance-heading">Appearance</h2>
+              <div className="skin-grid" role="radiogroup" aria-label="Skin">
+                {SKINS.map((skin, index) => (
+                  <button
+                    key={skin.id}
+                    type="button"
+                    className="skin-option"
+                    role="radio"
+                    aria-label={skin.label}
+                    aria-checked={state.appearance.skin === skin.id}
+                    tabIndex={state.appearance.skin === skin.id ? 0 : -1}
+                    onClick={() => setAppearance("skin", skin.id)}
+                    onKeyDown={(event) => {
+                      const offset =
+                        event.key === "ArrowRight" || event.key === "ArrowDown"
+                          ? 1
+                          : event.key === "ArrowLeft" || event.key === "ArrowUp"
+                            ? -1
+                            : 0;
+                      if (offset) {
+                        event.preventDefault();
+                        const next =
+                          (index + offset + SKINS.length) % SKINS.length;
+                        setAppearance("skin", SKINS[next]!.id);
+                        const elements =
+                          event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>(
+                            '[role="radio"]',
+                          );
+                        elements?.[next]?.focus();
+                      }
+                    }}
+                  >
+                    <span
+                      className="skin-preview"
+                      style={{ background: skin.swatch }}
+                    />
+                    <span className="skin-option-label">
+                      {skin.label}
+                      {state.appearance.skin === skin.id && (
+                        <Icon name="check" />
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="select-row">
+                <label className="select-field">
+                  Color mode
+                  <select
+                    aria-label="Color mode"
+                    value={state.appearance.mode}
+                    onChange={(event) =>
+                      setAppearance("mode", event.target.value as ThemeMode)
                     }
-                  }}
-                >
-                  <span
-                    className="skin-preview"
-                    style={{ background: skin.swatch }}
-                  />
-                  <span className="skin-option-label">
-                    {skin.label}
-                    {state.appearance.skin === skin.id && <Icon name="check" />}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div className="select-row">
-              <label className="select-field">
-                Color mode
-                <select
-                  aria-label="Color mode"
-                  value={state.appearance.mode}
-                  onChange={(event) =>
-                    setAppearance("mode", event.target.value as ThemeMode)
-                  }
-                >
-                  <option value="system">System</option>
-                  <option value="dark">Dark</option>
-                  <option value="light">Light</option>
-                </select>
-              </label>
-              <label className="select-field">
-                Effects
-                <select
-                  aria-label="Effects"
-                  value={state.appearance.effects}
-                  onChange={(event) =>
-                    setAppearance("effects", event.target.value as Effects)
-                  }
-                >
-                  <option value="full">Full</option>
-                  <option value="reduced">Reduced</option>
-                  <option value="static">Static</option>
-                </select>
-              </label>
-            </div>
-            <p className="small appearance-status" role="status">
-              {state.settingsMessage}
-            </p>
-            {renderer === "unavailable" && (
-              <p className="small">
-                Material effects are unavailable. Static appearance is active.
+                  >
+                    <option value="system">System</option>
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                  </select>
+                </label>
+                <label className="select-field">
+                  Effects
+                  <select
+                    aria-label="Effects"
+                    value={state.appearance.effects}
+                    onChange={(event) =>
+                      setAppearance("effects", event.target.value as Effects)
+                    }
+                  >
+                    <option value="full">Full</option>
+                    <option value="reduced">Reduced</option>
+                    <option value="static">Static</option>
+                  </select>
+                </label>
+              </div>
+              <p className="small appearance-status" role="status">
+                {state.settingsMessage}
               </p>
-            )}
-          </MaterialSurface>
+              {renderer === "unavailable" && (
+                <p className="small">
+                  Material effects are unavailable. Static appearance is active.
+                </p>
+              )}
+            </MaterialSurface>
+            <MaterialSurface
+              as="section"
+              className="archive-panel"
+              aria-labelledby="archive-heading"
+            >
+              <h2 id="archive-heading">Archived samples</h2>
+              <Button
+                className="button archive-button"
+                onClick={() => void controller.importArchive()}
+                disabled={importingArchive}
+                tip="Get Rave eJay ISO samples from the Internet Archive. Convert them to WAV files in your Samples folder."
+              >
+                Import Rave eJay ISO
+                <Icon name="arrow" />
+              </Button>
+              {importingArchive && (
+                <div className="archive-progress">
+                  <progress
+                    aria-label="Archive import progress"
+                    max={state.archive.total || 1}
+                    value={
+                      state.archive.total ? state.archive.completed : undefined
+                    }
+                  />
+                  <Button
+                    className="text-button"
+                    onClick={() => controller.cancelArchive()}
+                  >
+                    Stop import
+                  </Button>
+                </div>
+              )}
+              {state.archive.message && (
+                <p
+                  className={`archive-status ${state.archive.status}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  {state.archive.message}
+                </p>
+              )}
+            </MaterialSurface>
+          </div>
         </main>
         <footer className="site-footer">
           <span className="footer-state">

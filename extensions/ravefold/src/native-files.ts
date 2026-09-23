@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { constants, type Dir, type Stats } from "node:fs";
+import { constants, openAsBlob, type Dir, type Stats } from "node:fs";
 import * as fs from "node:fs/promises";
+import type { FileHandle as NodeFileHandle } from "node:fs/promises";
 import * as path from "node:path";
 import {
   MAX_SETTINGS_BYTES,
@@ -8,8 +9,10 @@ import {
 } from "../../../src/domain/settings.ts";
 import {
   MAX_READ_BYTES,
+  MAX_WRITE_BYTES,
   type NativeHandle,
 } from "../../../shared/native-protocol.ts";
+import { validateWav } from "../../../src/domain/wav.ts";
 
 export type { NativeHandle } from "../../../shared/native-protocol.ts";
 
@@ -26,14 +29,24 @@ interface Entry {
   grant: Grant;
   parts: string[];
   pending?: boolean;
-  owned?: "probe" | "settings";
+  owned?: "probe" | "settings" | "audio";
   version?: string;
 }
-interface Writer {
+interface MetadataWriter {
+  kind: "probe" | "settings";
   entry: Entry;
   version: string;
   text?: string;
 }
+interface AudioWriter {
+  kind: "audio";
+  entry: Entry;
+  temporary: string;
+  file: NodeFileHandle;
+  identity: string;
+  bytes: number;
+}
+type Writer = MetadataWriter | AudioWriter;
 interface Cursor {
   entry: Entry;
   directory: Dir;
@@ -255,6 +268,8 @@ export class NativeFiles {
     for (const cursor of this.cursors.values())
       await cursor.directory.close().catch(() => undefined);
     this.cursors.clear();
+    for (const writer of this.writers.values())
+      await this.discardWriter(writer);
     this.writers.clear();
     this.entries.clear();
     this.pathEntries.clear();
@@ -286,8 +301,12 @@ export class NativeFiles {
         this.cursors.delete(id);
       }
     }
-    for (const [id, writer] of this.writers)
-      if (writer.entry.grant === grant) this.writers.delete(id);
+    for (const [id, writer] of this.writers) {
+      if (writer.entry.grant === grant) {
+        this.writers.delete(id);
+        await this.discardWriter(writer);
+      }
+    }
     for (const entry of this.pathEntries.get(grant.id)?.values() ?? [])
       this.entries.delete(entry.descriptor.id);
     this.pathEntries.delete(grant.id);
@@ -378,11 +397,20 @@ export class NativeFiles {
     return { path: candidate, stat };
   }
 
-  private writeKind(entry: Entry): "probe" | "settings" {
+  private writeKind(entry: Entry): "probe" | "settings" | "audio" {
+    const name = entry.parts.at(-1);
+    if (
+      entry.grant.role === "samples" &&
+      entry.pending &&
+      entry.owned === "audio" &&
+      name &&
+      /\.wav$/iu.test(name)
+    )
+      return "audio";
     if (entry.parts.length !== 1)
       fail("NotAllowedError", "This file cannot be changed.");
-    const name = entry.parts[0]!;
-    if (probePattern.test(name)) {
+    const rootName = entry.parts[0]!;
+    if (probePattern.test(rootName)) {
       if (entry.owned !== "probe")
         fail(
           "NotAllowedError",
@@ -390,11 +418,11 @@ export class NativeFiles {
         );
       return "probe";
     }
-    if (entry.grant.role === "settings" && name === settingsName)
+    if (entry.grant.role === "settings" && rootName === settingsName)
       return "settings";
     fail(
       "NotAllowedError",
-      "Only validated settings and new access manifests can change.",
+      "Only new WAV files and approved metadata can be written.",
     );
   }
 
@@ -488,26 +516,40 @@ export class NativeFiles {
           if (!child.owned) this.deleteEntry(child);
           throw error;
         }
+        if (!location.stat && !request.create) {
+          if (!child.pending) this.deleteEntry(child);
+          fail("NotFoundError", "The selected file or folder is unavailable.");
+        }
         if (!location.stat && !child.pending) {
-          if (!request.create) {
-            this.deleteEntry(child);
-            fail(
-              "NotFoundError",
-              "The selected file or folder is unavailable.",
-            );
-          }
-          if (kind === "directory" || parent.parts.length !== 0) {
-            this.deleteEntry(child);
-            fail("NotAllowedError", "This entry cannot be created.");
-          }
-          if (probePattern.test(name)) child.owned = "probe";
-          else if (parent.grant.role === "settings" && name === settingsName)
+          if (kind === "directory") {
+            if (parent.grant.role !== "samples") {
+              this.deleteEntry(child);
+              fail("NotAllowedError", "This folder cannot be created.");
+            }
+            try {
+              await fs.mkdir(location.path);
+              await this.location(child);
+            } catch (error) {
+              this.deleteEntry(child);
+              throw error;
+            }
+          } else if (parent.parts.length === 0 && probePattern.test(name)) {
+            child.owned = "probe";
+            child.pending = true;
+          } else if (
+            parent.parts.length === 0 &&
+            parent.grant.role === "settings" &&
+            name === settingsName
+          ) {
             child.owned = "settings";
-          else {
+            child.pending = true;
+          } else if (parent.grant.role === "samples" && /\.wav$/iu.test(name)) {
+            child.owned = "audio";
+            child.pending = true;
+          } else {
             this.deleteEntry(child);
             fail("NotAllowedError", "This file cannot be created.");
           }
-          child.pending = true;
         }
         return child.descriptor;
       }
@@ -571,23 +613,46 @@ export class NativeFiles {
           fail("InvalidStateError", "This file already has an active write.");
         const current = await this.location(entry, entry.pending);
         if (current.stat) {
-          if (kind === "probe")
-            fail(
-              "NotAllowedError",
-              "An existing access manifest cannot be replaced.",
-            );
+          if (kind === "probe" || kind === "audio")
+            fail("NotAllowedError", "An existing file cannot be replaced.");
           parseSettings(await this.readText(entry, MAX_SETTINGS_BYTES));
         }
         const id = randomUUID();
+        if (kind === "audio") {
+          const temporary = path.join(
+            entry.grant.path,
+            `.ravefold-write-${randomUUID()}.tmp`,
+          );
+          const file = await fs.open(temporary, "wx", 0o600);
+          const audioWriter: AudioWriter = {
+            kind,
+            entry,
+            temporary,
+            file,
+            identity: identity(await file.stat()),
+            bytes: 0,
+          };
+          try {
+            await this.location(entry, true);
+          } catch (error) {
+            await this.discardWriter(audioWriter);
+            throw error;
+          }
+          this.writers.set(id, audioWriter);
+          return { writer: id, kind: "audio" };
+        }
         this.writers.set(id, {
+          kind,
           entry,
           version: current.stat ? version(current.stat) : "pending",
         });
-        return { writer: id };
+        return { writer: id, kind: "metadata" };
       }
       case "write": {
         fields(request, ["writer", "data"]);
         const writer = this.writer(request.writer);
+        if (writer.kind === "audio")
+          fail("NotAllowedError", "A WAV file requires binary data.");
         if (
           typeof request.data !== "string" ||
           Buffer.byteLength(request.data) > MAX_SETTINGS_BYTES
@@ -596,7 +661,7 @@ export class NativeFiles {
             "QuotaExceededError",
             "Only a small text document can be written.",
           );
-        if (this.writeKind(writer.entry) === "probe") {
+        if (writer.kind === "probe") {
           if (
             request.data !==
             JSON.stringify({
@@ -612,20 +677,66 @@ export class NativeFiles {
         writer.text = request.data;
         return null;
       }
+      case "writeBytes": {
+        fields(request, ["writer", "data"]);
+        const writer = this.writer(request.writer);
+        if (writer.kind !== "audio")
+          fail("NotAllowedError", "Only a new WAV file accepts binary data.");
+        if (
+          typeof request.data !== "string" ||
+          request.data.length === 0 ||
+          request.data.length > Math.ceil(MAX_WRITE_BYTES / 3) * 4 ||
+          !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(
+            request.data,
+          )
+        )
+          fail("TypeError", "The WAV data chunk is not valid.");
+        const bytes = Buffer.from(request.data, "base64");
+        if (
+          bytes.length === 0 ||
+          bytes.length > MAX_WRITE_BYTES ||
+          bytes.toString("base64") !== request.data
+        )
+          fail("TypeError", "The WAV data chunk is not valid.");
+        if (writer.bytes > Number.MAX_SAFE_INTEGER - bytes.length)
+          fail("QuotaExceededError", "The WAV file is too large.");
+        const current = await this.location(writer.entry, true);
+        if (current.stat)
+          fail("InvalidModificationError", "The WAV file already exists.");
+        let offset = 0;
+        while (offset < bytes.length) {
+          const result = await writer.file.write(
+            bytes,
+            offset,
+            bytes.length - offset,
+            null,
+          );
+          if (result.bytesWritten === 0)
+            fail("NotReadableError", "The WAV data could not be written.");
+          offset += result.bytesWritten;
+        }
+        writer.bytes += bytes.length;
+        return null;
+      }
       case "closeWriter": {
         fields(request, ["writer"]);
         const id = string(request.writer);
         const writer = this.writer(id);
         try {
-          await this.commit(writer);
+          if (writer.kind === "audio") await this.commitAudio(writer);
+          else await this.commit(writer);
         } finally {
           this.writers.delete(id);
+          await this.discardWriter(writer);
         }
         return null;
       }
       case "abortWriter": {
         fields(request, ["writer"]);
-        this.writers.delete(string(request.writer));
+        const id = string(request.writer);
+        const writer = this.writers.get(id);
+        this.writers.delete(id);
+        if (writer) await this.discardWriter(writer);
         return null;
       }
       case "remove":
@@ -692,7 +803,49 @@ export class NativeFiles {
     }
   }
 
-  private async commit(writer: Writer): Promise<void> {
+  private async discardWriter(writer: Writer): Promise<void> {
+    if (writer.kind !== "audio") return;
+    await writer.file.close().catch(() => undefined);
+    try {
+      const staged = await fs.lstat(writer.temporary);
+      if (!staged.isSymbolicLink() && identity(staged) === writer.identity)
+        await fs.unlink(writer.temporary);
+    } catch {
+      /* Preserve any file that this operation does not own. */
+    }
+  }
+
+  private async commitAudio(writer: AudioWriter): Promise<void> {
+    const current = await this.location(writer.entry, true);
+    if (current.stat)
+      fail("InvalidModificationError", "The WAV file already exists.");
+    await writer.file.sync();
+    await writer.file.close();
+    const staged = await fs.lstat(writer.temporary);
+    if (
+      staged.isSymbolicLink() ||
+      identity(staged) !== writer.identity ||
+      staged.size !== writer.bytes
+    )
+      fail("InvalidModificationError", "The WAV write changed before commit.");
+    const validation = await validateWav(await openAsBlob(writer.temporary));
+    if (!validation.valid) fail("TypeError", validation.reason);
+    this.active();
+    const checked = await this.location(writer.entry, true);
+    if (checked.stat)
+      fail("InvalidModificationError", "The WAV file already exists.");
+    const finalStage = await fs.lstat(writer.temporary);
+    if (
+      finalStage.isSymbolicLink() ||
+      identity(finalStage) !== writer.identity ||
+      finalStage.size !== writer.bytes
+    )
+      fail("InvalidModificationError", "The WAV write changed before commit.");
+    await fs.link(writer.temporary, checked.path);
+    writer.entry.pending = false;
+  }
+
+  private async commit(writer: MetadataWriter): Promise<void> {
     if (writer.text === undefined)
       fail("InvalidStateError", "The file write has no content.");
     const entry = writer.entry;

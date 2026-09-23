@@ -1,6 +1,7 @@
 export const NATIVE_CHANNEL = "ravefold-native";
 export const NATIVE_VERSION = 1;
 export const MAX_READ_BYTES = 262_144;
+export const MAX_WRITE_BYTES = 262_144;
 
 export type NativeRole = "samples" | "settings";
 export interface NativeHandle {
@@ -35,6 +36,7 @@ export type NativeOperation =
   | { op: "same" | "resolve"; handle: string; other: string }
   | { op: "openWriter"; handle: string }
   | { op: "write"; writer: string; data: string }
+  | { op: "writeBytes"; writer: string; data: string }
   | { op: "closeWriter" | "abortWriter"; writer: string }
   | { op: "remove"; handle: string; name: string };
 export type HostOperation =

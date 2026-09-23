@@ -1,7 +1,7 @@
 # RaveFold product slices
 
-Status: Spec-001 is implemented and passes automated checks. Its specification
-records remaining acceptance limits. Subsequent specifications stay drafts.
+Status: Specs 001 and 013 are implemented. The user accepted spec-013. Its
+Firefox check limit remains. Other specifications stay drafts.
 
 ## Authority and review boundary
 
@@ -11,10 +11,8 @@ evidence targets. Each specification below gives one user result and its
 acceptance checks. Proposed behavior does not have new product approval.
 
 The increase in spec-001 menu scope has user approval. Its interview is
-completed. Do not start an interview for a different specification without
-explicit user approval. An answer for spec-001 does not give approval for
-subsequent specifications. The user gave approval for implementation of spec-001
-only.
+completed. The user also requested spec-013 archive import. No other slice has
+implementation approval.
 
 ## Terms
 
@@ -51,6 +49,7 @@ of each slice through its user flow. Also do tests of its logic independently.
 | [010](spec-010-recover-work.md)         | Recover unsaved arrangement work                       | 009                                | No approval |
 | [011](spec-011-render-song.md)          | Render the mix to a selected folder                    | 008, 009                           | No approval |
 | [012](spec-012-change-appearance.md)    | Keep themes stable during tracker use                  | 001, 002, 006                      | No approval |
+| [013](spec-013-import-og-archive.md)    | Import OG archive samples as WAV files                 | 001                                | Completed   |
 
 The order shows dependencies. It does not give approval for a subsequent
 interview. Slices 004 and 005 can follow the initial arrangement slice after its
@@ -67,7 +66,7 @@ on subsequent components that write projects.
   approval.
 - Accept WAV samples only. Export supports WAV and MP3. MP3 is not a sample
   format.
-- Supply no samples or demo songs. OG project import is excluded permanently.
+- Bundle no samples or demo songs. OG project import is excluded permanently.
   The first release does not include recording, synthesis or automation.
 - Use the selected sample folder for all persistent library audio. Do not delete
   or change existing audio, including partial files and files made by the app.

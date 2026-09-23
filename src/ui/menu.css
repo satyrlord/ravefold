@@ -97,10 +97,71 @@ a {
   gap: 24px;
   min-width: 0;
 }
+.appearance-column {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+}
 .session-panel,
 .folder-panel,
 .appearance-panel {
   padding: 30px;
+}
+.archive-panel {
+  padding: 24px 30px;
+}
+.archive-panel h2 {
+  margin-bottom: 16px;
+}
+.archive-panel .control-with-tip,
+.archive-button {
+  width: 100%;
+}
+.archive-button {
+  justify-content: space-between;
+  text-align: left;
+}
+.archive-button svg {
+  flex: none;
+}
+.archive-progress {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+}
+.archive-progress progress {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: var(--plate);
+  color: var(--accent);
+  accent-color: var(--accent);
+}
+.archive-progress progress::-webkit-progress-bar {
+  background: var(--plate);
+}
+.archive-progress progress::-webkit-progress-value {
+  background: var(--accent);
+}
+.archive-progress .text-button {
+  flex: none;
+}
+.archive-status {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.archive-status.error {
+  color: var(--danger);
+}
+.archive-status.complete {
+  color: var(--success);
 }
 h1,
 h2,
@@ -513,6 +574,9 @@ option {
   .appearance-panel {
     padding: 26px;
   }
+  .archive-panel {
+    padding: 24px 26px;
+  }
   .skin-grid {
     grid-template-columns: repeat(6, 1fr);
   }
@@ -544,6 +608,9 @@ option {
   .session-panel,
   .folder-panel,
   .appearance-panel {
+    padding: 22px;
+  }
+  .archive-panel {
     padding: 22px;
   }
   h1 {
