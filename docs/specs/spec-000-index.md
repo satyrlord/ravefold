@@ -1,8 +1,8 @@
 # RaveFold product slices
 
-Status: Specs 001, 002, 003 and 013 are implemented. The user accepted specs 001
-and 013. Other specifications stay drafts. Browser support and tests are limited
-to Chromium.
+Status: Specs 001, 002, 003, 004 and 013 are implemented. The user accepted
+specs 001 and 013. Other specifications stay drafts. Browser support and tests
+are limited to Chromium.
 
 ## Authority and review boundary
 
@@ -14,8 +14,8 @@ acceptance checks. Proposed behavior does not have new product approval.
 The increase in spec-001 menu scope has user approval. Its interview is
 completed. The user also requested spec-013 archive import. On 2026-09-23, the
 user authorized spec-002 implementation after a full tracker mockup request. The
-user also authorized spec-003 implementation. Other slices do not have
-implementation approval.
+user also authorized spec-003 implementation. On 2026-09-24, the user authorized
+spec-004 implementation. Other slices do not have implementation approval.
 
 ## Terms
 
@@ -43,7 +43,7 @@ of each slice through its user flow. Also do tests of its logic independently.
 | [001](spec-001-select-folders.md)       | Use the full main menu and enter the tracker           | M0 entry contracts, M1 UI evidence | Completed                 |
 | [002](spec-002-find-a-sample.md)        | Find, tag and audition a source sample                 | 001                                | Implementation authorized |
 | [003](spec-003-use-compatible-audio.md) | Make compatible audio ready for arrangement            | 002                                | Implementation authorized |
-| [004](spec-004-prepare-a-sample.md)     | Prepare a sample at the supported tempo and key        | 003, M1 conversion evidence        | No approval               |
+| [004](spec-004-prepare-a-sample.md)     | Prepare a sample at the supported tempo and key        | 003, M1 conversion evidence        | Implementation authorized |
 | [005](spec-005-review-a-sample.md)      | Resolve an uncertain sample or select a usable section | 003, 004                           | No approval               |
 | [006](spec-006-arrange-and-play.md)     | Place ready clips and play a short arrangement         | 003, M1 playback evidence          | No approval               |
 | [007](spec-007-edit-sections.md)        | Move, copy, repeat and remove song sections            | 006                                | No approval               |

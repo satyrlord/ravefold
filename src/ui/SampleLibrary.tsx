@@ -4,6 +4,8 @@ import type { LibraryController, LibraryState } from "../library/controller.ts";
 import type { PreviewState } from "../library/preview.ts";
 import { MaterialSurface } from "../skins/MaterialRoot.tsx";
 import { Button, Icon } from "./controls.tsx";
+import { ACTIVE_PHASES } from "../domain/preparation.ts";
+import { PHASE_LABELS } from "./PreparationPanel.tsx";
 import { TrackerIcon } from "./tracker-icons.tsx";
 
 export function SampleLibrary({
@@ -121,66 +123,87 @@ export function SampleLibrary({
           <tbody>
             {rows
               .slice(currentPage * 100, (currentPage + 1) * 100)
-              .map((sample) => (
-                <tr
-                  key={sample.path}
-                  data-state={
-                    state.selected === sample.path ? "selected" : undefined
-                  }
-                >
-                  <td>
-                    <Button
-                      className="row-preview"
-                      aria-label={`Preview source: ${sample.path}`}
-                      tip="Play this source. Stop the previous preview."
-                      onClick={() => onPlay(sample)}
-                    >
-                      <TrackerIcon name="play" />
-                    </Button>
-                  </td>
-                  <td>
-                    <button
-                      className="sample-select"
-                      aria-label={sample.path}
-                      aria-pressed={state.selected === sample.path}
-                      onClick={() => onSelect(sample.path)}
-                    >
-                      <span className="sample-name">{sample.name}</span>
-                      <span className="sample-path">
-                        {sample.folder || "Samples"} · {sample.format}
-                      </span>
-                      <span className="sample-tags">
-                        {controller.tags(sample.path).join(" · ")}
-                        {state.drafts[sample.path] ? " · Unsaved" : ""}
-                      </span>
-                    </button>
-                  </td>
-                  <td>
-                    <span
-                      className="preparation-state"
-                      data-status={
-                        state.analysis?.path === sample.path
-                          ? state.analysis.status
-                          : undefined
-                      }
-                    >
-                      {state.analysis?.path !== sample.path
-                        ? "Not checked"
-                        : state.analysis.status === "ready"
-                          ? "Ready"
-                          : state.analysis.status === "needs-conversion"
-                            ? "Needs conversion"
-                            : state.analysis.status === "needs-review"
-                              ? "Needs review"
-                              : state.analysis.status === "unusable"
-                                ? "Unusable"
-                                : state.analysis.status === "error"
-                                  ? "Analysis unavailable"
-                                  : "Analyzing"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              .map((sample) => {
+                const preparation = controller.preparationFor(sample.path);
+                const stopped =
+                  state.preparation.recoveryRequired &&
+                  preparation &&
+                  (preparation.phase === "queued" ||
+                    ACTIVE_PHASES.includes(preparation.phase));
+                return (
+                  <tr
+                    key={sample.path}
+                    data-state={
+                      state.selected === sample.path ? "selected" : undefined
+                    }
+                  >
+                    <td>
+                      <Button
+                        className="row-preview"
+                        aria-label={`Preview source: ${sample.path}`}
+                        tip="Play this source. Stop the previous preview."
+                        onClick={() => onPlay(sample)}
+                      >
+                        <TrackerIcon name="play" />
+                      </Button>
+                    </td>
+                    <td>
+                      <button
+                        className="sample-select"
+                        aria-label={sample.path}
+                        aria-pressed={state.selected === sample.path}
+                        onClick={() => onSelect(sample.path)}
+                      >
+                        <span className="sample-name">{sample.name}</span>
+                        <span className="sample-path">
+                          {sample.folder || "Samples"} · {sample.format}
+                        </span>
+                        <span className="sample-tags">
+                          {controller.tags(sample.path).join(" · ")}
+                          {state.drafts[sample.path] ? " · Unsaved" : ""}
+                        </span>
+                      </button>
+                    </td>
+                    <td>
+                      {preparation ? (
+                        <span
+                          className="preparation-state"
+                          data-status={stopped ? "failed" : preparation.phase}
+                        >
+                          {stopped
+                            ? "Preparation stopped"
+                            : preparation.phase === "ready"
+                              ? "Prepared"
+                              : `Preparation: ${PHASE_LABELS[preparation.phase].toLowerCase()}`}
+                        </span>
+                      ) : (
+                        <span
+                          className="preparation-state"
+                          data-status={
+                            state.analysis?.path === sample.path
+                              ? state.analysis.status
+                              : undefined
+                          }
+                        >
+                          {state.analysis?.path !== sample.path
+                            ? "Not checked"
+                            : state.analysis.status === "ready"
+                              ? "Ready"
+                              : state.analysis.status === "needs-conversion"
+                                ? "Needs conversion"
+                                : state.analysis.status === "needs-review"
+                                  ? "Needs review"
+                                  : state.analysis.status === "unusable"
+                                    ? "Unusable"
+                                    : state.analysis.status === "error"
+                                      ? "Analysis unavailable"
+                                      : "Analyzing"}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
           </tbody>
         </table>
         {rows.length === 0 && (

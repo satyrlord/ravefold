@@ -8,6 +8,13 @@ export interface OfficialSourceEvidence {
   sourceBytes: number;
 }
 
+/** A ready preparation job that produced this exact file. */
+export interface PreparedOutputEvidence {
+  sha256: string;
+  bytes: number;
+  expectedBpm: 90 | 180;
+}
+
 /** Read custom File handles before transfer. Cancellation stops later Worker work. */
 export async function readSourceBytes(
   file: Blob,
@@ -34,6 +41,7 @@ export async function analyzeSource(
   file: Blob,
   signal?: AbortSignal,
   officialSource?: OfficialSourceEvidence,
+  preparedOutput?: PreparedOutputEvidence,
 ): Promise<AudioAnalysisReply> {
   signal?.throwIfAborted();
   if (typeof Worker !== "function") {
@@ -71,7 +79,7 @@ export async function analyzeSource(
       return;
     }
     try {
-      worker.postMessage({ bytes, officialSource }, [bytes]);
+      worker.postMessage({ bytes, officialSource, preparedOutput }, [bytes]);
     } catch (error) {
       if (close()) reject(error);
     }

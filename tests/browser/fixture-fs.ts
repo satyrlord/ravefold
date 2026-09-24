@@ -14,6 +14,7 @@ export interface FixtureOptions {
   unavailablePersistence?: boolean;
   library?: boolean;
   analysisSamples?: boolean;
+  preparationSamples?: boolean;
   sourceClaim?: "matching" | "mismatched";
   extraSamples?: number;
   sampleMetadata?: Record<string, string>;
@@ -43,6 +44,7 @@ export interface FixtureControls {
   blockAudioWrite(): void;
   audioWriteStarted(): boolean;
   releaseAudioWrite(): void;
+  failAudioWrite(name: string | null): void;
   changeSelectedAudio(path: string): void;
   snapshot(): Promise<FixtureSnapshot>;
 }
@@ -85,6 +87,7 @@ export async function installFixtureFS(
     let releaseRead = () => {};
     let audioReadGate: Promise<void> = Promise.resolve();
     let audioWriteStarted = false;
+    let audioWriteFailure: string | null = null;
     let releaseAudioWrite = () => {};
     let audioWriteGate: Promise<void> = Promise.resolve();
     let releaseSlow = () => {};
@@ -121,6 +124,8 @@ export async function installFixtureFS(
               audioWriteStarted = true;
               await audioWriteGate;
             }
+            if (typeof value !== "string" && audioWriteFailure)
+              throw new DOMException("Write failed.", audioWriteFailure);
             if (typeof value === "string") {
               pending = textEncoder.encode(value);
               writes.push({ path: this.path, contents: value });
@@ -337,11 +342,17 @@ export async function installFixtureFS(
       return pcm16Wav(audio, sampleRate);
     }
     function phrase(
-      options: { gain?: number; offsetSeconds?: number; notes?: number[] } = {},
+      options: {
+        gain?: number;
+        offsetSeconds?: number;
+        notes?: number[];
+        bpm?: number;
+      } = {},
     ): Uint8Array<ArrayBuffer> {
       const notes = options.notes ?? [60, 63, 67, 68, 70, 60];
       const sampleRate = 48000;
-      const beatFrames = (sampleRate * 60) / 180;
+      const bpm = options.bpm ?? 180;
+      const beatFrames = (sampleRate * 60) / bpm;
       const audio = new Float32Array(Math.round(notes.length * beatFrames));
       for (let beat = 0; beat < notes.length; beat++) {
         const start = Math.round(
@@ -353,7 +364,7 @@ export async function installFixtureFS(
         for (let frame = 0; frame < active; frame++) {
           const seconds = frame / sampleRate;
           const attack = Math.min(1, seconds / 0.006);
-          const accent = beat % 4 === 0 ? 1.6 : 1;
+          const accent = bpm === 180 && beat % 4 === 0 ? 1.6 : 1;
           audio[start + frame] =
             0.45 *
             (options.gain ?? 1) *
@@ -414,6 +425,23 @@ export async function installFixtureFS(
       analysis.file("noise-one-shot.wav", noise(0.6, [0]));
       analysis.file("drum-loop-90.wav", noise(beat * 4, drumPulses));
       analysis.file("broken.wav", "not a waveform");
+    }
+    if (configuration.preparationSamples) {
+      const prepare = samples.folder("Prepare");
+      const natural = [60, 63, 67, 68, 70, 67, 63, 60];
+      prepare.file("c-minor-135.wav", phrase({ bpm: 135, notes: natural }));
+      prepare.file(
+        "d-minor-90.wav",
+        phrase({ bpm: 90, notes: natural.map((note) => note + 2) }),
+      );
+      const beat = 60 / 135;
+      prepare.file(
+        "hits-135.wav",
+        noise(
+          beat * 8,
+          Array.from({ length: 8 }, (_, index) => index * beat),
+        ),
+      );
     }
     if (configuration.extraSamples) {
       const catalog = samples.folder("Catalog");
@@ -589,6 +617,9 @@ export async function installFixtureFS(
         });
       },
       audioWriteStarted: () => audioWriteStarted,
+      failAudioWrite: (name) => {
+        audioWriteFailure = name;
+      },
       releaseAudioWrite: () => {
         holdAudioWrite = false;
         releaseAudioWrite();

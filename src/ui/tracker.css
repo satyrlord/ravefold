@@ -676,6 +676,39 @@
 .pair-status[data-status="error"] {
   color: var(--danger);
 }
+.preparation-plan {
+  margin: 0 0 10px;
+}
+.preparation-status {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.preparation-status[data-phase="ready"],
+.preparation-state[data-status="ready"] {
+  color: var(--success);
+}
+.preparation-status[data-phase="failed"],
+.preparation-state[data-status="failed"] {
+  color: var(--danger);
+}
+.preparation-progress {
+  height: 6px;
+  margin: 8px 0;
+  overflow: hidden;
+  border: 1px solid var(--edge);
+  border-radius: 3px;
+}
+.preparation-progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .preparation-progress span {
+    transition: none;
+  }
+}
 .editable-tags {
   display: flex;
   flex-wrap: wrap;

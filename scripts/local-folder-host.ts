@@ -36,6 +36,11 @@ import {
   parsePairManifest,
 } from "../src/domain/pair-manifest.ts";
 import {
+  MAX_PREPARATION_MANIFEST_BYTES,
+  parsePreparationManifest,
+  PREPARATION_MANIFEST_FILENAME,
+} from "../src/domain/preparation.ts";
+import {
   SOURCE_MANIFEST_FILENAME,
   MAX_SOURCE_MANIFEST_BYTES,
   parseSourceManifest,
@@ -267,6 +272,8 @@ export class LocalFolderHost {
         return MAX_PAIR_MANIFEST_BYTES;
       if (entry.root === "samples" && name === SOURCE_MANIFEST_FILENAME)
         return MAX_SOURCE_MANIFEST_BYTES;
+      if (entry.root === "samples" && name === PREPARATION_MANIFEST_FILENAME)
+        return MAX_PREPARATION_MANIFEST_BYTES;
       if (PROBE.test(name)) return 256;
       if (entry.root === "samples" && TAG_RESERVATION_PATTERN.test(name))
         return MAX_TAG_RESERVATION_BYTES;
@@ -587,6 +594,10 @@ export class LocalFolderHost {
     }
     if (entry.name === SOURCE_MANIFEST_FILENAME) {
       parseSourceManifest(source);
+      return;
+    }
+    if (entry.name === PREPARATION_MANIFEST_FILENAME) {
+      parsePreparationManifest(source);
       return;
     }
     if (TAG_RESERVATION_PATTERN.test(entry.name)) {

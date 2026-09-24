@@ -5,7 +5,14 @@ import type { AudioAnalysisReply } from "../audio/analyze-worker.ts";
 import { analyzePair } from "../audio/pair-analyzer.ts";
 import type { PairAudioReply } from "../audio/pair-worker.ts";
 import { MAX_DECODE_WAV_BYTES, MAX_DECODE_WAV_SECONDS } from "../audio/pcm.ts";
+import { planPreparation, type PlanResult } from "../domain/preparation.ts";
+import type { FileHandle } from "../storage/handles.ts";
 import { discoverCatalog, type CatalogResult } from "./catalog.ts";
+import {
+  PreparationQueue,
+  type PreparationOptions,
+  type PreparationState,
+} from "./preparation.ts";
 import { saveAudioAnalysis } from "./audio-manifest.ts";
 import { savePairAnalysis } from "./pair-manifest.ts";
 import { verifyOfficialSource } from "./source-manifest.ts";
@@ -22,6 +29,7 @@ export interface SourceAnalysisState {
     | "error";
   message: string;
   result?: AudioAnalysisReply;
+  plan?: PlanResult;
 }
 
 export interface PairDraft {
@@ -48,6 +56,8 @@ export interface LibraryState {
   analysis?: SourceAnalysisState;
   pairDraft: PairDraft;
   pair?: PairCheckState;
+  preparation: PreparationState;
+  preparationError: string;
   message: string;
   loading: boolean;
   tagsReadable: boolean;
@@ -61,6 +71,8 @@ export class LibraryController {
   private pairSelection = 0;
   private pairTask?: AbortController;
   private draftBaselines = new Map<string, string[]>();
+  private analyzedSources = new Map<string, string | null>();
+  private preparation: PreparationQueue;
   private listeners = new Set<() => void>();
   private state: LibraryState = {
     catalog: {
@@ -76,12 +88,31 @@ export class LibraryController {
     tagErrors: {},
     metadataMessage: "",
     pairDraft: { leftPath: null, rightPath: null, provenanceId: null },
+    preparation: {
+      jobs: {},
+      progress: {},
+      readable: false,
+      recoveryRequired: false,
+      message: "",
+      session: "",
+    },
+    preparationError: "",
     message: "",
     loading: true,
     tagsReadable: false,
   };
-  constructor(root: DirectoryHandle) {
+  constructor(
+    root: DirectoryHandle,
+    preparation: Omit<PreparationOptions, "onOutput"> = {},
+  ) {
     this.root = root;
+    this.preparation = new PreparationQueue(root, {
+      ...preparation,
+      onOutput: (path, handle) => this.addRow(path, handle),
+    });
+    this.preparation.subscribe(() =>
+      this.update({ preparation: this.preparation.getSnapshot() }),
+    );
   }
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => {
@@ -106,6 +137,7 @@ export class LibraryController {
       pair: undefined,
     });
     const before = this.state.manifest;
+    void this.preparation.load().catch(() => undefined);
     const tags = readTags(this.root).then((result) => {
       if (!current()) return;
       if (result.status === "valid")
@@ -150,6 +182,7 @@ export class LibraryController {
     this.selectionTask?.abort();
     const selectionTask = new AbortController();
     this.selectionTask = selectionTask;
+    this.analyzedSources.set(path, null);
     this.update({
       selected: path,
       metadata: undefined,
@@ -207,6 +240,7 @@ export class LibraryController {
         selectionTask.signal,
       );
       if (sequence !== this.selection || selectionTask.signal.aborted) return;
+      const prepared = this.preparation.readyOutput(path);
       const analyzed = await analyzeSource(
         file,
         selectionTask.signal,
@@ -216,9 +250,17 @@ export class LibraryController {
               sourceBytes: source.sourceBytes,
             }
           : undefined,
+        prepared?.output
+          ? {
+              sha256: prepared.output.sha256,
+              bytes: prepared.output.bytes,
+              expectedBpm: prepared.plan.targetBpm,
+            }
+          : undefined,
       );
       if (sequence !== this.selection || selectionTask.signal.aborted) return;
       try {
+        this.analyzedSources.set(path, analyzed.sourceSha256);
         await saveAudioAnalysis(
           this.root,
           path,
@@ -245,7 +287,9 @@ export class LibraryController {
           status: analyzed.analysis.status,
           message: analyzed.analysis.reasons.join(" "),
           result: analyzed,
+          plan: planPreparation(analyzed.analysis, analyzed.info),
         },
+        preparationError: "",
       });
     } catch (error) {
       if (selectionTask.signal.aborted) return;
@@ -265,6 +309,72 @@ export class LibraryController {
           },
         });
     }
+  }
+  /** Save a job for the analyzed selection. Processing continues in the background. */
+  async prepare() {
+    const analysis = this.state.analysis;
+    if (!analysis?.result || analysis.status !== "needs-conversion") return;
+    await this.preparationCommand(() =>
+      this.preparation.prepare(analysis.path, analysis.result!),
+    );
+  }
+  cancelPreparation(id: string) {
+    return this.preparationCommand(() => this.preparation.cancel(id));
+  }
+  retryPreparation(id: string) {
+    return this.preparationCommand(() => this.preparation.retry(id));
+  }
+  recoverPreparation() {
+    return this.preparationCommand(() => this.preparation.recoverPersistence());
+  }
+  private async preparationCommand(command: () => Promise<unknown>) {
+    this.update({ preparationError: "" });
+    try {
+      await command();
+    } catch (error) {
+      this.update({
+        preparationError:
+          error instanceof Error
+            ? error.message
+            : "The preparation command failed. Try again.",
+      });
+    }
+  }
+  /** Give source preview priority over preparation work. */
+  setPlaybackActive(active: boolean) {
+    this.preparation.setPlaybackActive(active);
+  }
+  /** The newest job for the current source content. */
+  preparationFor(path: string, sourceSha256?: string) {
+    const hash = sourceSha256 ?? this.analyzedSources.get(path);
+    if (hash === null) return undefined;
+    return this.preparation.jobFor(path, hash);
+  }
+  private addRow(path: string, handle: FileHandle) {
+    if (this.state.catalog.rows.some((row) => row.path === path)) return;
+    const parts = path.split("/");
+    const folders = new Set(this.state.catalog.folders);
+    for (let index = 1; index < parts.length; index++)
+      folders.add(parts.slice(0, index).join("/"));
+    this.update({
+      catalog: {
+        ...this.state.catalog,
+        rows: [
+          ...this.state.catalog.rows,
+          {
+            id: path,
+            path,
+            name: parts.at(-1)!,
+            folder: parts.slice(0, -1).join("/"),
+            handle,
+            format: "WAV" as const,
+            preparation: "not-prepared" as const,
+          },
+        ].sort((a, b) => a.path.localeCompare(b.path)),
+        folders: [...folders].sort((a, b) => a.localeCompare(b)),
+        examined: this.state.catalog.examined + 1,
+      },
+    });
   }
   setPairSide(side: "left" | "right", path: string) {
     if (!this.state.catalog.rows.some((sample) => sample.path === path)) return;
@@ -502,6 +612,7 @@ export class LibraryController {
   }
   dispose() {
     this.task.abort();
+    this.preparation.dispose();
     this.selectionTask?.abort();
     this.pairTask?.abort();
     this.selection++;
@@ -524,6 +635,7 @@ export class LibraryController {
         ]),
       ),
     });
+    this.preparation.suspend();
     this.task.abort();
     this.selectionTask?.abort();
     this.pairTask?.abort();
@@ -534,5 +646,6 @@ export class LibraryController {
     this.suspend();
     this.root = root;
     this.task = new AbortController();
+    this.preparation.resume(root);
   }
 }

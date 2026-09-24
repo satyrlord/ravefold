@@ -19,6 +19,11 @@ interface WorkerScope {
         event: MessageEvent<{
           bytes: ArrayBuffer;
           officialSource?: { sourceSha256: string; sourceBytes: number };
+          preparedOutput?: {
+            sha256: string;
+            bytes: number;
+            expectedBpm: 90 | 180;
+          };
         }>,
       ) => void)
     | null;
@@ -37,11 +42,16 @@ scope.onmessage = async ({ data }) => {
     const verifiedOfficialSource =
       data.officialSource?.sourceSha256 === sourceSha256 &&
       data.officialSource.sourceBytes === data.bytes.byteLength;
+    const prepared =
+      data.preparedOutput?.sha256 === sourceSha256 &&
+      data.preparedOutput.bytes === data.bytes.byteLength
+        ? data.preparedOutput.expectedBpm
+        : undefined;
     const decoded = await decodeWav(file);
-    const analysis = analyzeAudio(
-      decoded,
-      verifiedOfficialSource ? { verifiedOfficialSource: true } : undefined,
-    );
+    const analysis = analyzeAudio(decoded, {
+      ...(verifiedOfficialSource ? { verifiedOfficialSource: true } : {}),
+      ...(prepared ? { expectedBpm: prepared } : {}),
+    });
     const info: WavInfo = {
       encoding: decoded.encoding,
       channels: decoded.channels.length === 2 ? 2 : 1,

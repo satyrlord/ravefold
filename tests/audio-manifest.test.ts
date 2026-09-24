@@ -767,3 +767,50 @@ test("source-backed writes fail closed without a current source manifest", async
   assert.equal((await readAudioAnalysis(root)).status, "valid");
   assert.equal(file.writes, 0);
 });
+
+test("a transposition result keeps its source key apart from C-minor claims", async () => {
+  const { analyzeAudio } = await import("../src/audio/analyze.ts");
+  const { decodeWav } = await import("../src/audio/pcm.ts");
+  const { wavInfo } = await import("../src/audio/prepare-core.ts");
+  const { NATURAL, phrase, wavFile } = await import("./audio-signals.ts");
+  const bytes = wavFile(
+    phrase(
+      90,
+      NATURAL.map((note) => note + 2),
+    ),
+  );
+  const decoded = await decodeWav(new Blob([bytes]));
+  const measured = analyzeAudio(decoded);
+  assert.equal(measured.status, "needs-conversion");
+  const row = {
+    sourceSha256: createHash("sha256").update(bytes).digest("hex"),
+    sourceBytes: bytes.byteLength,
+    wav: wavInfo(decoded),
+    declared: null,
+    measured,
+    corrected: null,
+  };
+  assert.deepEqual(validateAudioRecord(row).measured, measured);
+  const key = measured.measured.sourceKey!;
+  for (const change of [
+    { status: "ready" },
+    { measured: { ...measured.measured, transposeSemitones: 3 } },
+    { measured: { ...measured.measured, sourceKey: { ...key, root: 3 } } },
+    { measured: { ...measured.measured, key: "C", minorForm: "natural" } },
+    {
+      measured: {
+        ...measured.measured,
+        sourceKey: {
+          ...key,
+          pitchClasses: [...key.pitchClasses, 11].sort((a, b) => a - b),
+        },
+      },
+    },
+    { measured: { ...measured.measured, sampleKind: "key-neutral-loop" } },
+  ])
+    assert.throws(
+      () =>
+        validateAudioRecord({ ...row, measured: { ...measured, ...change } }),
+      JSON.stringify(change),
+    );
+});

@@ -1,10 +1,19 @@
-import type { AudioAnalysis, SourceBackedEvidence } from "../audio/analyze.ts";
+import type {
+  AudioAnalysis,
+  AudioMeasurements,
+  SourceBackedEvidence,
+} from "../audio/analyze.ts";
+import { nearestShiftToC } from "./music.ts";
 import type { WavInfo } from "./wav.ts";
 import { validateSamplePath } from "./project.ts";
 
 export const AUDIO_MANIFEST_FILENAME = "ravefold-analysis.manifest.json";
 export const MAX_AUDIO_MANIFEST_BYTES = 8 * 1024 * 1024;
 const MAX_AUDIO_RECORDS = 20_000;
+const ANALYSIS_VERSIONS: readonly AudioAnalysis["algorithmVersion"][] = [
+  "audio-analysis-v2",
+  "audio-analysis-v3",
+];
 
 export interface DeclaredAudio {
   source: "og-collection" | "file" | "user";
@@ -77,6 +86,54 @@ function measuredCompatibility(
   )
     throw new Error("Measured minor forms do not match the pitch classes.");
   return { classes: [...classes], forms: expected };
+}
+
+/** The degrees that establish each form, in addition to the tonic triad. */
+const FORM_DEGREES: Record<MinorForm, readonly number[]> = {
+  natural: [8, 10],
+  harmonic: [8, 11],
+  melodic: [9, 11],
+};
+
+function measuredTransposition(
+  keyValue: unknown,
+  shiftValue: unknown,
+): Pick<AudioMeasurements, "sourceKey" | "transposeSemitones"> | undefined {
+  if (keyValue === undefined && shiftValue === undefined) return undefined;
+  const data = object(keyValue, ["root", "minorForm", "pitchClasses"]);
+  const root = whole(data.root, 1, "Source key root");
+  const form = MINOR_FORM_ORDER.find((name) => name === data.minorForm);
+  const classes = data.pitchClasses;
+  if (
+    root > 11 ||
+    !form ||
+    !Array.isArray(classes) ||
+    classes.length < 5 ||
+    classes.length > 7 ||
+    classes.some(
+      (value, index) =>
+        !Number.isInteger(value) ||
+        value < 0 ||
+        value > 11 ||
+        (index > 0 && value <= classes[index - 1]),
+    )
+  )
+    throw new Error("The measured source key is invalid.");
+  const shifted = new Set(
+    (classes as number[]).map((value) => (value - root + 12) % 12),
+  );
+  const notes: readonly number[] = C_MINOR_FORMS[form];
+  if (
+    ![0, 3, 7, ...FORM_DEGREES[form]].every((note) => shifted.has(note)) ||
+    [...shifted].some((note) => !notes.includes(note))
+  )
+    throw new Error("The measured source key does not match its notes.");
+  if (shiftValue !== nearestShiftToC(root))
+    throw new Error("The transposition is not the nearest shift to C.");
+  return {
+    sourceKey: { root, minorForm: form, pitchClasses: [...classes] },
+    transposeSemitones: shiftValue,
+  };
 }
 
 function sourceBackedEvidence(
@@ -281,7 +338,10 @@ function analysis(value: unknown): AudioAnalysis {
     "measured",
     "reasons",
   ]);
-  if (data.algorithmVersion !== "audio-analysis-v2")
+  const algorithmVersion = ANALYSIS_VERSIONS.find(
+    (version) => version === data.algorithmVersion,
+  );
+  if (!algorithmVersion)
     throw new Error("The audio analysis version is not supported.");
   if (
     data.status !== "ready" &&
@@ -301,6 +361,8 @@ function analysis(value: unknown): AudioAnalysis {
       "compatiblePitchClasses",
       "compatibleMinorForms",
       "sourceBackedEvidence",
+      "sourceKey",
+      "transposeSemitones",
     ],
   );
   if (
@@ -357,6 +419,22 @@ function analysis(value: unknown): AudioAnalysis {
     values.sampleKind === "source-backed-one-shot"
       ? sourceBackedEvidence(values.sourceBackedEvidence, values.sampleKind)
       : undefined;
+  const transposition = measuredTransposition(
+    values.sourceKey,
+    values.transposeSemitones,
+  );
+  if (
+    transposition &&
+    (data.status !== "needs-conversion" ||
+      (values.sampleKind !== "tonal-loop" &&
+        values.sampleKind !== "tuned-percussion") ||
+      values.key !== undefined ||
+      values.minorForm !== undefined ||
+      compatibility.classes !== undefined ||
+      sourceBpm === undefined ||
+      beatCount === undefined)
+  )
+    throw new Error("Only a tonal conversion result can have a source key.");
   const reasons = data.reasons;
   if (
     !Array.isArray(reasons) ||
@@ -427,7 +505,7 @@ function analysis(value: unknown): AudioAnalysis {
     }
   }
   return {
-    algorithmVersion: "audio-analysis-v2",
+    algorithmVersion,
     status: data.status,
     measured: {
       sampleKind: values.sampleKind,
@@ -445,6 +523,7 @@ function analysis(value: unknown): AudioAnalysis {
         ? { compatibleMinorForms: compatibility.forms }
         : {}),
       ...(backed ? { sourceBackedEvidence: backed } : {}),
+      ...(transposition ?? {}),
       detectorScores: { rhythm, pitch },
     },
     reasons: [...reasons] as string[],

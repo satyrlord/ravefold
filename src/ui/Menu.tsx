@@ -4,6 +4,7 @@ import type { EntryResult } from "../domain/entry.ts";
 import type { Appearance, Effects, ThemeMode } from "../domain/settings.ts";
 import type { DirectoryHandle, FolderKind } from "../storage/handles.ts";
 import { LibraryController } from "../library/controller.ts";
+import { ACTIVE_PHASES } from "../domain/preparation.ts";
 import { MaterialRoot, MaterialSurface } from "../skins/MaterialRoot.tsx";
 import type { RendererState } from "../skins/MaterialRoot.tsx";
 import { SKINS } from "../skins/registry.ts";
@@ -74,7 +75,12 @@ export function Menu({ onEntry }: { onEntry: (entry: EntryResult) => void }) {
     const warn = (event: BeforeUnloadEvent) => {
       if (
         libraries.current.some(
-          ({ library }) => Object.keys(library.getSnapshot().drafts).length,
+          ({ library }) =>
+            Object.keys(library.getSnapshot().drafts).length ||
+            Object.values(library.getSnapshot().preparation.jobs).some(
+              (job) =>
+                job.phase === "queued" || ACTIVE_PHASES.includes(job.phase),
+            ),
         )
       ) {
         event.preventDefault();

@@ -993,3 +993,10 @@ On 2026-09-23, the user requested one-click OG archive sample import from the
 main menu. [Spec-013](specs/spec-013-import-og-archive.md) records this separate
 scope. The user tested the import and declared the slice complete. This approval
 does not extend to general sample preparation or other draft slices.
+
+The user authorized spec-004 implementation on 2026-09-24. Preparation uses the
+first DSP candidate in a Worker after offline interface tests. The candidate
+changes duration at constant pitch. A resampler then changes pitch. The built-in
+pitch shift of the candidate did not meet the 5 cent criterion for low tones.
+The private research file records these measurements. Listening review, memory
+and combined-load results remain open.

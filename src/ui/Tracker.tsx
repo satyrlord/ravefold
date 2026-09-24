@@ -63,6 +63,11 @@ export function Tracker({
     query.addEventListener("change", close);
     return () => query.removeEventListener("change", close);
   }, []);
+  useEffect(() => {
+    controller.setPlaybackActive(
+      previewState.status === "playing" || previewState.status === "loading",
+    );
+  }, [controller, previewState.status]);
   const select = (path: string) => {
     void controller.select(path);
     setInspector(true);

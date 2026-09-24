@@ -227,17 +227,21 @@ function browserDiskDirectory(folder: string): DirectoryHandle {
         name,
         isSameEntry: async (other) => handle === other,
         getFile: async () => {
-          try {
-            return new File([await fs.readFile(target)], name);
-          } catch (error) {
-            if (
-              error &&
-              typeof error === "object" &&
-              "code" in error &&
-              error.code === "ENOENT"
-            )
-              throw new DOMException("Missing.", "NotFoundError");
-            throw error;
+          // Windows reports EPERM for a file with a pending deletion.
+          for (let attempt = 0; ; attempt++) {
+            try {
+              return new File([await fs.readFile(target)], name);
+            } catch (error) {
+              const code =
+                error && typeof error === "object" && "code" in error
+                  ? String(error.code)
+                  : "";
+              if (code === "ENOENT")
+                throw new DOMException("Missing.", "NotFoundError");
+              if (attempt >= 9 || !["EPERM", "EACCES", "EBUSY"].includes(code))
+                throw error;
+              await delay(20);
+            }
           }
         },
         createWritable: async (): Promise<WritableHandle> => {

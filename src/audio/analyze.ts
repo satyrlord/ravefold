@@ -1,6 +1,11 @@
+import { nearestShiftToC } from "../domain/music.ts";
 import type { DecodedWav } from "./pcm.ts";
 
-export const AUDIO_ANALYSIS_VERSION = "audio-analysis-v2" as const;
+export const AUDIO_ANALYSIS_VERSION = "audio-analysis-v3" as const;
+export const AUDIO_ANALYSIS_VERSIONS = [
+  "audio-analysis-v2",
+  AUDIO_ANALYSIS_VERSION,
+] as const;
 
 export type AnalyzedSampleKind =
   | "unpitched-one-shot"
@@ -36,20 +41,30 @@ export interface AudioMeasurements {
   compatiblePitchClasses?: number[];
   compatibleMinorForms?: Array<"natural" | "harmonic" | "melodic">;
   sourceBackedEvidence?: SourceBackedEvidence;
+  /** A minor phrase in another key. Only a conversion result has it. */
+  sourceKey?: {
+    root: number;
+    minorForm: "natural" | "harmonic" | "melodic";
+    pitchClasses: number[];
+  };
+  /** The nearest semitone shift from the source root to C. */
+  transposeSemitones?: number;
   /** Detector scores in [0, 1]. They are not calibrated probabilities. */
   detectorScores: { rhythm: number; pitch: number };
 }
 
 export interface AudioAnalysis {
-  algorithmVersion: typeof AUDIO_ANALYSIS_VERSION;
+  algorithmVersion: (typeof AUDIO_ANALYSIS_VERSIONS)[number];
   status: "ready" | "needs-conversion" | "needs-review";
   measured: AudioMeasurements;
   reasons: string[];
 }
 
-/** The caller verifies this record against the exact source-file hash. */
 export interface AudioAnalysisContext {
-  verifiedOfficialSource: true;
+  /** The caller verifies this record against the exact source-file hash. */
+  verifiedOfficialSource?: true;
+  /** The target of a validated preparation job for this exact output file. */
+  expectedBpm?: 90 | 180;
 }
 
 interface PitchEstimate {
@@ -243,6 +258,39 @@ function compatibleFacts(
     ...(establishedForm
       ? { key: "C" as const, minorForm: establishedForm }
       : {}),
+  };
+}
+
+/**
+ * Find one established minor form in another key. A pitch-class set cannot
+ * separate a minor key from its relative major, so the first and last
+ * measured notes must also be the root.
+ */
+function otherMinorKey(
+  classes: ReadonlySet<number>,
+  first: number,
+  last: number,
+): Pick<AudioMeasurements, "sourceKey" | "transposeSemitones"> | null {
+  const matches: Array<{
+    root: number;
+    minorForm: NonNullable<AudioMeasurements["minorForm"]>;
+  }> = [];
+  for (let root = 1; root < 12; root++) {
+    const form = minorForm(
+      new Set([...classes].map((pitchClass) => (pitchClass - root + 12) % 12)),
+    );
+    if (form) matches.push({ root, minorForm: form });
+  }
+  if (matches.length !== 1) return null;
+  const { root, minorForm: form } = matches[0]!;
+  if (first !== root || last !== root) return null;
+  return {
+    sourceKey: {
+      root,
+      minorForm: form,
+      pitchClasses: [...classes].sort((a, b) => a - b),
+    },
+    transposeSemitones: nearestShiftToC(root),
   };
 }
 
@@ -610,11 +658,12 @@ function periodicLoop(
   const first = candidates[0]!;
   const second = candidates[1]!;
   if (first.score < 0.45) return null;
-  const source180 = candidates.find((candidate) => candidate.bpm === 180)!;
-  const chosen =
-    context?.verifiedOfficialSource && source180.score >= 0.45
-      ? source180
-      : first;
+  const preferredBpm =
+    context?.expectedBpm ?? (context?.verifiedOfficialSource ? 180 : undefined);
+  const preferred = candidates.find(
+    (candidate) => candidate.bpm === preferredBpm,
+  );
+  const chosen = preferred && preferred.score >= 0.45 ? preferred : first;
   const rhythmScore = chosen.score;
   if (context?.verifiedOfficialSource && chosen.bpm !== 180)
     return result(
@@ -623,15 +672,21 @@ function periodicLoop(
       "Measured rhythm does not support the verified 180 BPM source grid.",
       { rhythm: first.score, pitch: 0 },
     );
+  if (context?.expectedBpm && chosen.bpm !== context.expectedBpm)
+    return result(
+      "needs-review",
+      "uncertain",
+      "Measured rhythm does not support the prepared tempo.",
+      { rhythm: first.score, pitch: 0 },
+    );
+  const resolved = Boolean(context?.verifiedOfficialSource || preferred);
   if (
-    (!context?.verifiedOfficialSource &&
+    (!resolved &&
       chosen.bpm === 180 &&
       candidates.some(
         (candidate) => candidate.bpm === 90 && candidate.beatCount >= 4,
       )) ||
-    (chosen === first &&
-      first.score - second.score < 0.12 &&
-      !context?.verifiedOfficialSource)
+    (chosen === first && first.score - second.score < 0.12 && !resolved)
   )
     return result(
       "needs-review",
@@ -911,6 +966,10 @@ function analyzeMeasuredAudio(
       a.bpm === b.bpm &&
       a.key === b.key &&
       a.minorForm === b.minorForm &&
+      a.sourceKey?.root === b.sourceKey?.root &&
+      a.sourceKey?.minorForm === b.sourceKey?.minorForm &&
+      sameValues(a.sourceKey?.pitchClasses, b.sourceKey?.pitchClasses) &&
+      a.transposeSemitones === b.transposeSemitones &&
       sameValues(a.compatiblePitchClasses, b.compatiblePitchClasses) &&
       sameValues(a.compatibleMinorForms, b.compatibleMinorForms) &&
       (a.estimatedBpm === undefined ||
@@ -1358,11 +1417,12 @@ function analyzeMeasuredAudio(
         blockFrames,
         otherBpm,
       );
+      const resolved =
+        context?.verifiedOfficialSource ||
+        context?.expectedBpm === supportedBpm;
       if (
-        (supportedBpm === 180 && !context?.verifiedOfficialSource) ||
-        (otherScore >= 0.45 &&
-          chosenScore - otherScore < 0.12 &&
-          !context?.verifiedOfficialSource)
+        (supportedBpm === 180 && !resolved) ||
+        (otherScore >= 0.45 && chosenScore - otherScore < 0.12 && !resolved)
       ) {
         return result(
           "needs-review",
@@ -1379,6 +1439,14 @@ function analyzeMeasuredAudio(
       "uncertain",
       "Measured 90 BPM attacks contradict the verified 180 BPM source grid.",
       scores,
+    );
+  if (context?.expectedBpm && supportedBpm !== context.expectedBpm)
+    return result(
+      "needs-review",
+      "uncertain",
+      "Measured attacks do not support the prepared tempo.",
+      scores,
+      tempoFacts,
     );
   const shortEvent = onsetBlocks.some((block, index) => {
     const next = onsetBlocks[index + 1] ?? blockCount;
@@ -1405,7 +1473,7 @@ function analyzeMeasuredAudio(
     ? average(pitched.map((pitch) => pitch.score))
     : 0;
   if (!pitched.length) {
-    if (supportedBpm === 90)
+    if (supportedBpm === 90 && context?.expectedBpm !== 90)
       return result(
         "needs-review",
         "uncertain",
@@ -1496,7 +1564,22 @@ function analyzeMeasuredAudio(
     earlyToLate.filter((ratio) => ratio < 0.35).length >= beatCount * 0.75;
   const kind: AnalyzedSampleKind = tuned ? "tuned-percussion" : "tonal-loop";
   const facts = compatibleFacts(classes);
-  if (!facts)
+  if (!facts) {
+    const transposition = otherMinorKey(
+      classes,
+      pitched[0]!.pitchClass!,
+      pitched.at(-1)!.pitchClass!,
+    );
+    if (transposition)
+      return result(
+        "needs-conversion",
+        kind,
+        tempoIsReady
+          ? "Measured minor notes need transposition to C minor."
+          : "Measured minor notes and loop tempo need conversion.",
+        scores,
+        { ...tempoFacts, ...transposition },
+      );
     return result(
       "needs-review",
       kind,
@@ -1504,6 +1587,7 @@ function analyzeMeasuredAudio(
       scores,
       tempoFacts,
     );
+  }
   if (!tempoIsReady)
     return result(
       "needs-conversion",

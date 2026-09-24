@@ -741,3 +741,85 @@ test("declared metadata cannot create or change an analysis result", () => {
   assert.deepEqual(analyzeAudio(falseMajorDeclaration), analyzeAudio(minor));
   assert.equal(analyzeAudio(minor).status, "ready");
 });
+
+test("a minor phrase in another key needs transposition to the nearest C", () => {
+  for (const [shift, root, transpose, notes, form] of [
+    [2, 2, -2, C_NATURAL, "natural"],
+    [-3, 9, 3, C_NATURAL, "natural"],
+    [7, 7, 5, C_HARMONIC, "harmonic"],
+    [6, 6, -6, C_NATURAL, "natural"],
+  ] as const) {
+    const analysis = analyzeAudio(
+      phrase(
+        90,
+        notes.map((note) => note + shift),
+      ),
+    );
+    assert.equal(analysis.status, "needs-conversion", JSON.stringify(analysis));
+    assert.equal(analysis.measured.sourceKey?.root, root);
+    assert.equal(analysis.measured.sourceKey?.minorForm, form);
+    assert.equal(analysis.measured.transposeSemitones, transpose);
+    assert.equal(analysis.measured.key, undefined);
+    assert.equal(analysis.measured.compatiblePitchClasses, undefined);
+  }
+  const harmonic = analyzeAudio(
+    phrase(
+      90,
+      C_HARMONIC.map((note) => note + 2),
+    ),
+  );
+  assert.equal(harmonic.measured.sourceKey?.minorForm, "harmonic");
+});
+
+test("relative major, major and short minor phrases stay in review", () => {
+  for (const notes of [
+    [60, 62, 64, 65, 67, 69, 71, 60],
+    [62, 66, 69, 71, 73, 69, 66, 62],
+    [64, 67, 71, 64, 67, 71, 67, 64],
+    [64, 60, 57, 59, 62, 64, 65, 67],
+  ]) {
+    const analysis = analyzeAudio(phrase(90, notes));
+    assert.equal(analysis.status, "needs-review", JSON.stringify(notes));
+    assert.equal(analysis.measured.transposeSemitones, undefined);
+  }
+});
+
+test("stereo conversion requires the same source key and shift in both channels", () => {
+  const left = phrase(
+    135,
+    C_NATURAL.map((note) => note + 2),
+  );
+  for (const [notes, expected] of [
+    [C_NATURAL.map((note) => note + 6), "needs-review"],
+    [C_HARMONIC.map((note) => note + 2), "needs-review"],
+    [C_NATURAL.map((note) => note + 2), "needs-conversion"],
+  ] as const) {
+    const right = phrase(135, notes);
+    assert.equal(analyzeAudio(right).status, "needs-conversion");
+    const combined = analyzeAudio({
+      ...left,
+      channels: [left.channels[0]!, right.channels[0]!],
+    });
+    assert.equal(combined.status, expected, JSON.stringify(combined));
+    if (expected === "needs-conversion") {
+      assert.equal(combined.measured.sourceKey?.root, 2);
+      assert.equal(combined.measured.transposeSemitones, -2);
+    } else {
+      assert.equal(combined.measured.sourceKey, undefined);
+      assert.equal(combined.measured.transposeSemitones, undefined);
+    }
+  }
+});
+
+test("a prepared tempo resolves the 90 and 180 BPM alias only when attacks agree", () => {
+  const output = phrase(180, C_NATURAL);
+  assert.equal(analyzeAudio(output).status, "needs-review");
+  const prepared = analyzeAudio(output, { expectedBpm: 180 });
+  assert.equal(prepared.status, "ready", JSON.stringify(prepared));
+  assert.equal(prepared.measured.bpm, 180);
+  assert.equal(prepared.measured.beatCount, 8);
+  const wrong = analyzeAudio(output, { expectedBpm: 90 });
+  assert.equal(wrong.status, "needs-review");
+  const drums = analyzeAudio(noise(2, [0, 0.5, 1, 1.5]), { expectedBpm: 180 });
+  assert.equal(drums.status, "needs-review", JSON.stringify(drums));
+});

@@ -5,6 +5,7 @@ import { SourcePreview, type SourceWaveform } from "../library/preview.ts";
 import { normalizeTags } from "../library/tags.ts";
 import { MaterialSurface } from "../skins/MaterialRoot.tsx";
 import { Button, Icon } from "./controls.tsx";
+import { PreparationPanel } from "./PreparationPanel.tsx";
 import { TrackerIcon } from "./tracker-icons.tsx";
 
 const PITCH_NAMES = [
@@ -76,6 +77,13 @@ export function SampleInspector({
     }
   };
   const tags = sample ? controller.tags(sample.path) : [];
+  const job = sample
+    ? controller.preparationFor(sample.path, analysis?.result?.sourceSha256)
+    : undefined;
+  const preparedRow =
+    job?.phase === "ready" && job.output
+      ? state.catalog.rows.find((row) => row.path === job.output!.path)
+      : undefined;
   const tagStatus = sample ? state.tagStatus[sample.path] : undefined;
   const addTag = () => {
     if (!sample) return;
@@ -175,6 +183,14 @@ export function SampleInspector({
                 tip="Play the analyzed source without a change to its audio."
               >
                 Play ready source
+              </Button>
+            ) : preparedRow ? (
+              <Button
+                className="tracker-button"
+                onClick={() => void preview.play(preparedRow)}
+                tip="Play the validated prepared file."
+              >
+                Play prepared
               </Button>
             ) : (
               <Button
@@ -292,14 +308,12 @@ export function SampleInspector({
             </p>
             <p className="muted">User corrections: Not recorded.</p>
           </section>
-          <section className="inspector-section">
-            <h3>Prepared</h3>
-            <p className="muted">
-              {analysis?.status === "ready"
-                ? "Uses unchanged source audio."
-                : "No ready audio."}
-            </p>
-          </section>
+          <PreparationPanel
+            sample={sample}
+            analysis={analysis}
+            state={state}
+            controller={controller}
+          />
           <section className="inspector-section" aria-label="Split stereo pair">
             <h3>Split stereo pair</h3>
             <p className="muted">

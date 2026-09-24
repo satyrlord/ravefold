@@ -16,6 +16,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { LocalFolderHost } from "../scripts/local-folder-host.ts";
 import { AUDIO_MANIFEST_FILENAME } from "../src/domain/audio-manifest.ts";
 import { PAIR_MANIFEST_FILENAME } from "../src/domain/pair-manifest.ts";
+import { PREPARATION_MANIFEST_FILENAME } from "../src/domain/preparation.ts";
 import { SOURCE_MANIFEST_FILENAME } from "../src/domain/source-manifest.ts";
 import type {
   LocalHandle,
@@ -159,6 +160,7 @@ test("local host accepts analysis manifests only in the sample folder", async ()
       [AUDIO_MANIFEST_FILENAME, "samples"],
       [PAIR_MANIFEST_FILENAME, "pairs"],
       [SOURCE_MANIFEST_FILENAME, "sources"],
+      [PREPARATION_MANIFEST_FILENAME, "jobs"],
     ] as const) {
       const file = await child(f.host, f.roots.samples, name);
       const valid = JSON.stringify({
