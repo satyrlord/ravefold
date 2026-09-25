@@ -1,4 +1,4 @@
-import type { AudioAnalysisReply } from "./analyze-worker.ts";
+import type { AudioAnalysisReply, ReviewRequest } from "./analyze-worker.ts";
 import { MAX_DECODE_WAV_BYTES } from "./pcm.ts";
 
 type WorkerReply = { result: AudioAnalysisReply } | { error: string };
@@ -13,6 +13,8 @@ export interface PreparedOutputEvidence {
   sha256: string;
   bytes: number;
   expectedBpm: 90 | 180;
+  /** The job tempo came from a corrected reading of the same audio. */
+  correctedBpm?: 90 | 180;
 }
 
 /** Read custom File handles before transfer. Cancellation stops later Worker work. */
@@ -42,6 +44,7 @@ export async function analyzeSource(
   signal?: AbortSignal,
   officialSource?: OfficialSourceEvidence,
   preparedOutput?: PreparedOutputEvidence,
+  review?: ReviewRequest,
 ): Promise<AudioAnalysisReply> {
   signal?.throwIfAborted();
   if (typeof Worker !== "function") {
@@ -79,7 +82,9 @@ export async function analyzeSource(
       return;
     }
     try {
-      worker.postMessage({ bytes, officialSource, preparedOutput }, [bytes]);
+      worker.postMessage({ bytes, officialSource, preparedOutput, review }, [
+        bytes,
+      ]);
     } catch (error) {
       if (close()) reject(error);
     }

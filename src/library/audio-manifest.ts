@@ -239,6 +239,7 @@ export function saveAudioAnalysis(
     declared: result.declared ?? null,
     measured: result.analysis,
     corrected: result.corrected ?? null,
+    ...(result.reviewed ? { reviewed: result.reviewed } : {}),
   });
   const expectedTask = baseline(root, samplePath);
   void expectedTask.catch(() => undefined);

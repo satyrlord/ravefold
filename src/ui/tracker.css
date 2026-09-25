@@ -715,6 +715,74 @@
   gap: 5px;
   margin-bottom: 8px;
 }
+.review-evidence {
+  margin: 10px 0 4px;
+}
+.review-form {
+  margin-top: 10px;
+}
+.review-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 12px;
+}
+.review-fields label {
+  color: var(--muted);
+}
+.review-form input,
+.review-form select {
+  min-width: 0;
+  width: 100%;
+  min-height: 32px;
+  border-radius: 5px;
+  padding: 6px 8px;
+  border: 1px solid var(--edge);
+  color: var(--text);
+  background: var(--bg);
+}
+.review-region {
+  border: 1px solid var(--edge);
+  border-radius: 6px;
+  margin: 10px 0;
+  padding: 8px 10px 10px;
+}
+.review-region legend {
+  padding: 0 4px;
+  font-size: 12px;
+}
+.review-region p {
+  margin-bottom: 8px;
+}
+.review-result {
+  margin-top: 12px;
+}
+.review-status {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.review-status[data-status="ready"] {
+  color: var(--success);
+}
+.review-status[data-status="invalid"],
+.review-status[data-status="error"] {
+  color: var(--danger);
+}
+.review-history ul {
+  margin: 8px 0 0;
+  padding-left: 16px;
+}
+.review-history li {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.waveform-panel .waveform-region {
+  fill: var(--accent);
+  fill-opacity: 0.18;
+  stroke: none;
+}
 .tag-chip {
   display: flex;
   align-items: center;
@@ -1045,6 +1113,9 @@
   }
   .waveform-panel svg {
     stroke: CanvasText;
+  }
+  .waveform-panel .waveform-region {
+    fill: Highlight;
   }
   .overview-clip.missing {
     border: 2px dashed CanvasText;

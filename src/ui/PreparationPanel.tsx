@@ -10,6 +10,7 @@ import {
   type PreparationPhase,
   type PreparationPlan,
 } from "../domain/preparation.ts";
+import { regionLabel } from "../domain/review.ts";
 import { Button } from "./controls.tsx";
 
 export const PHASE_LABELS: Record<PreparationPhase, string> = {
@@ -29,7 +30,7 @@ function pitchChange(semitones: number): string {
   return `${semitones > 0 ? "Up" : "Down"} ${size} semitone${size === 1 ? "" : "s"}`;
 }
 
-function PlanSummary({ plan }: { plan: PreparationPlan }) {
+export function PlanSummary({ plan }: { plan: PreparationPlan }) {
   return (
     <dl className="sample-metadata preparation-plan">
       <dt>Source tempo</dt>
@@ -40,11 +41,17 @@ function PlanSummary({ plan }: { plan: PreparationPlan }) {
       <dd>{plan.beatCount}</dd>
       <dt>Pitch change</dt>
       <dd>{pitchChange(plan.semitones)}</dd>
+      <dt>Input</dt>
+      <dd>
+        {plan.region
+          ? `Section ${regionLabel(plan.region, plan.sampleRate)}`
+          : "Whole source"}
+      </dd>
     </dl>
   );
 }
 
-function JobStatus({
+export function JobStatus({
   job,
   progress,
   session,
@@ -98,7 +105,7 @@ export function PreparationPanel({
   state: LibraryState;
   controller: LibraryController;
 }) {
-  const job = controller.preparationFor(
+  const job = controller.wholePreparation(
     sample.path,
     analysis?.result?.sourceSha256,
   );

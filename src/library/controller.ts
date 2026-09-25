@@ -1,11 +1,20 @@
 import type { DirectoryHandle } from "../storage/handles.ts";
 import { validateWav, type WavInfo } from "../domain/wav.ts";
-import { analyzeSource } from "../audio/analyzer.ts";
+import {
+  analyzeSource,
+  type PreparedOutputEvidence,
+} from "../audio/analyzer.ts";
+import type { AudioAnalysis } from "../audio/analyze.ts";
 import type { AudioAnalysisReply } from "../audio/analyze-worker.ts";
 import { analyzePair } from "../audio/pair-analyzer.ts";
 import type { PairAudioReply } from "../audio/pair-worker.ts";
 import { MAX_DECODE_WAV_BYTES, MAX_DECODE_WAV_SECONDS } from "../audio/pcm.ts";
-import { planPreparation, type PlanResult } from "../domain/preparation.ts";
+import {
+  outputContext,
+  planPreparation,
+  type PlanInput,
+  type PlanResult,
+} from "../domain/preparation.ts";
 import type { FileHandle } from "../storage/handles.ts";
 import { discoverCatalog, type CatalogResult } from "./catalog.ts";
 import {
@@ -13,10 +22,26 @@ import {
   type PreparationOptions,
   type PreparationState,
 } from "./preparation.ts";
-import { saveAudioAnalysis } from "./audio-manifest.ts";
+import {
+  readAudioAnalysis,
+  saveAudioAnalysis,
+  type AudioRecord,
+} from "./audio-manifest.ts";
 import { savePairAnalysis } from "./pair-manifest.ts";
 import { verifyOfficialSource } from "./source-manifest.ts";
+import {
+  correctedAudio,
+  isEmptyReview,
+  planCorrection,
+  reviewInput,
+  reviewInputProblem,
+  reviewRequest,
+  type ReviewInput,
+} from "./review.ts";
 import { readTags, saveSampleTags, type TagManifest } from "./tags.ts";
+
+/** The analysis entry point. Tests can run it without a Worker. */
+export type SourceAnalyzer = typeof analyzeSource;
 
 export interface SourceAnalysisState {
   path: string;
@@ -29,6 +54,26 @@ export interface SourceAnalysisState {
     | "error";
   message: string;
   result?: AudioAnalysisReply;
+  plan?: PlanResult;
+  /** The corrected analysis for a whole-source review. */
+  planInput?: PlanInput & { analysis: AudioAnalysis };
+}
+
+/** The validation result for the review input of one source. */
+export interface ReviewState {
+  path: string;
+  sourceSha256: string;
+  status:
+    | "checking"
+    | "ready"
+    | "needs-conversion"
+    | "needs-review"
+    | "invalid"
+    | "error";
+  message: string;
+  /** The input that this result validated. */
+  input: ReviewInput;
+  reviewed?: AudioAnalysis;
   plan?: PlanResult;
 }
 
@@ -54,6 +99,7 @@ export interface LibraryState {
   metadata?: WavInfo;
   metadataMessage: string;
   analysis?: SourceAnalysisState;
+  review?: ReviewState;
   pairDraft: PairDraft;
   pair?: PairCheckState;
   preparation: PreparationState;
@@ -68,6 +114,9 @@ export class LibraryController {
   private task = new AbortController();
   private selection = 0;
   private selectionTask?: AbortController;
+  private reviewSequence = 0;
+  private reviewTask?: AbortController;
+  private readonly analyze: SourceAnalyzer;
   private pairSelection = 0;
   private pairTask?: AbortController;
   private draftBaselines = new Map<string, string[]>();
@@ -103,8 +152,12 @@ export class LibraryController {
   };
   constructor(
     root: DirectoryHandle,
-    preparation: Omit<PreparationOptions, "onOutput"> = {},
+    options: Omit<PreparationOptions, "onOutput"> & {
+      analyze?: SourceAnalyzer;
+    } = {},
   ) {
+    const { analyze, ...preparation } = options;
+    this.analyze = analyze ?? analyzeSource;
     this.root = root;
     this.preparation = new PreparationQueue(root, {
       ...preparation,
@@ -134,6 +187,7 @@ export class LibraryController {
       metadata: undefined,
       metadataMessage: this.state.selected ? "Reading file format." : "",
       analysis: undefined,
+      review: undefined,
       pair: undefined,
     });
     const before = this.state.manifest;
@@ -180,6 +234,8 @@ export class LibraryController {
     if (!row) return;
     const sequence = ++this.selection;
     this.selectionTask?.abort();
+    this.reviewTask?.abort();
+    this.reviewSequence++;
     const selectionTask = new AbortController();
     this.selectionTask = selectionTask;
     this.analyzedSources.set(path, null);
@@ -192,6 +248,7 @@ export class LibraryController {
         status: "checking",
         message: "Checking source audio.",
       },
+      review: undefined,
     });
     try {
       const file = await row.handle.getFile();
@@ -240,8 +297,18 @@ export class LibraryController {
         selectionTask.signal,
       );
       if (sequence !== this.selection || selectionTask.signal.aborted) return;
-      const prepared = this.preparation.readyOutput(path);
-      const analyzed = await analyzeSource(
+      // A saved review applies again only to the same source content.
+      const stored = await this.storedRecord(path);
+      if (sequence !== this.selection || selectionTask.signal.aborted) return;
+      const storedInput =
+        stored?.corrected &&
+        stored.sourceBytes === file.size &&
+        JSON.stringify(stored.wav) === JSON.stringify(result.info)
+          ? reviewInput(stored.corrected)
+          : undefined;
+      const review =
+        storedInput && !isEmptyReview(storedInput) ? storedInput : undefined;
+      const reply = await this.analyze(
         file,
         selectionTask.signal,
         source.verifiedOfficialSource
@@ -250,21 +317,22 @@ export class LibraryController {
               sourceBytes: source.sourceBytes,
             }
           : undefined,
-        prepared?.output
-          ? {
-              sha256: prepared.output.sha256,
-              bytes: prepared.output.bytes,
-              expectedBpm: prepared.plan.targetBpm,
-            }
-          : undefined,
+        this.preparedEvidence(path),
+        review ? reviewRequest(review) : undefined,
       );
       if (sequence !== this.selection || selectionTask.signal.aborted) return;
+      const kept =
+        review && reply.reviewed && reply.sourceSha256 === stored?.sourceSha256
+          ? review
+          : undefined;
+      const analyzed: AudioAnalysisReply = { ...reply };
+      if (!kept) delete analyzed.reviewed;
       try {
         this.analyzedSources.set(path, analyzed.sourceSha256);
         await saveAudioAnalysis(
           this.root,
           path,
-          analyzed,
+          { ...analyzed, corrected: kept ? correctedAudio(kept) : null },
           selectionTask.signal,
         );
       } catch {
@@ -281,16 +349,8 @@ export class LibraryController {
         return;
       }
       if (sequence !== this.selection || selectionTask.signal.aborted) return;
-      this.update({
-        analysis: {
-          path,
-          status: analyzed.analysis.status,
-          message: analyzed.analysis.reasons.join(" "),
-          result: analyzed,
-          plan: planPreparation(analyzed.analysis, analyzed.info),
-        },
-        preparationError: "",
-      });
+      this.applyReply(path, analyzed, kept);
+      this.update({ preparationError: "" });
     } catch (error) {
       if (selectionTask.signal.aborted) return;
       if (sequence === this.selection)
@@ -310,12 +370,189 @@ export class LibraryController {
         });
     }
   }
+  private async storedRecord(path: string): Promise<AudioRecord | undefined> {
+    try {
+      const read = await readAudioAnalysis(this.root);
+      return read.status === "valid" ? read.value.samples[path] : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Evidence for a file that a ready job produced. */
+  private preparedEvidence(path: string): PreparedOutputEvidence | undefined {
+    const prepared = this.preparation.readyOutput(path);
+    if (!prepared?.output) return undefined;
+    const target = prepared.plan.targetBpm;
+    return {
+      sha256: prepared.output.sha256,
+      bytes: prepared.output.bytes,
+      expectedBpm: target,
+      ...(outputContext(prepared.plan).correction
+        ? { correctedBpm: target }
+        : {}),
+    };
+  }
+
+  /**
+   * Show a reply. A whole-source review sets the source status. A region
+   * review never changes the source status.
+   */
+  private applyReply(
+    path: string,
+    reply: AudioAnalysisReply,
+    input: ReviewInput | undefined,
+  ) {
+    const reviewed = input ? reply.reviewed : undefined;
+    const correction = input ? planCorrection(input) : null;
+    const whole = reviewed && !input!.region ? reviewed : undefined;
+    const planInput = whole ? { analysis: whole, correction } : undefined;
+    const effective = whole ?? reply.analysis;
+    this.update({
+      analysis: {
+        path,
+        status: effective.status,
+        message: effective.reasons.join(" "),
+        result: reply,
+        plan: planPreparation(effective, reply.info, planInput ?? {}),
+        ...(planInput ? { planInput } : {}),
+      },
+      review:
+        input && reviewed
+          ? {
+              path,
+              sourceSha256: reply.sourceSha256,
+              status: reviewed.status,
+              message: reviewed.reasons.join(" "),
+              input,
+              reviewed,
+              plan: planPreparation(reviewed, reply.info, {
+                region: input.region,
+                correction,
+              }),
+            }
+          : undefined,
+    });
+  }
+
+  /**
+   * Validate corrected input again. Empty input removes the saved correction.
+   * A later request or selection makes an earlier result stale.
+   */
+  async submitReview(input: ReviewInput) {
+    const path = this.state.selected;
+    const analysis = this.state.analysis;
+    const row = this.state.catalog.rows.find((sample) => sample.path === path);
+    if (!path || !row || analysis?.path !== path || !analysis.result) return;
+    const selection = this.selection;
+    const sequence = ++this.reviewSequence;
+    this.reviewTask?.abort();
+    const task = new AbortController();
+    this.reviewTask = task;
+    const base = {
+      path,
+      sourceSha256: analysis.result.sourceSha256,
+      input,
+    };
+    const problem = reviewInputProblem(input, analysis.result.info);
+    if (problem) {
+      this.update({
+        review: { ...base, status: "invalid", message: problem },
+      });
+      return;
+    }
+    const empty = isEmptyReview(input);
+    this.update({
+      review: {
+        ...base,
+        status: "checking",
+        message: empty
+          ? "Removing the corrections and checking the source again."
+          : "Validating the corrected input.",
+      },
+    });
+    const stale = () =>
+      sequence !== this.reviewSequence ||
+      selection !== this.selection ||
+      task.signal.aborted;
+    try {
+      const file = await row.handle.getFile();
+      if (stale()) return;
+      const source = await verifyOfficialSource(this.root, path, task.signal);
+      if (stale()) return;
+      const reply = await this.analyze(
+        file,
+        task.signal,
+        source.verifiedOfficialSource
+          ? {
+              sourceSha256: source.sourceSha256,
+              sourceBytes: source.sourceBytes,
+            }
+          : undefined,
+        this.preparedEvidence(path),
+        empty ? undefined : reviewRequest(input),
+      );
+      if (stale()) return;
+      this.analyzedSources.set(path, reply.sourceSha256);
+      await saveAudioAnalysis(
+        this.root,
+        path,
+        { ...reply, corrected: empty ? null : correctedAudio(input) },
+        task.signal,
+      );
+      if (stale()) return;
+      this.applyReply(path, reply, empty ? undefined : input);
+    } catch (error) {
+      if (stale()) return;
+      this.update({
+        review: {
+          ...base,
+          status: "error",
+          message:
+            error instanceof Error &&
+            (error.message.startsWith("The region") ||
+              error.message ===
+                "Audio analysis is unavailable in this browser.")
+              ? error.message
+              : "The review could not be validated or saved. Check folder access and try again.",
+        },
+      });
+    }
+  }
+
   /** Save a job for the analyzed selection. Processing continues in the background. */
   async prepare() {
     const analysis = this.state.analysis;
     if (!analysis?.result || analysis.status !== "needs-conversion") return;
     await this.preparationCommand(() =>
-      this.preparation.prepare(analysis.path, analysis.result!),
+      this.preparation.prepare(
+        analysis.path,
+        analysis.result!,
+        analysis.planInput,
+      ),
+    );
+  }
+
+  /** Save a job for the validated review section. */
+  async prepareReview() {
+    const review = this.state.review;
+    const analysis = this.state.analysis;
+    if (
+      !review?.reviewed ||
+      !review.plan?.valid ||
+      !review.input.region ||
+      !analysis?.result ||
+      review.path !== analysis.path ||
+      review.sourceSha256 !== analysis.result.sourceSha256
+    )
+      return;
+    const reviewed = review.reviewed;
+    await this.preparationCommand(() =>
+      this.preparation.prepare(review.path, analysis.result!, {
+        analysis: reviewed,
+        region: review.input.region,
+        correction: planCorrection(review.input),
+      }),
     );
   }
   cancelPreparation(id: string) {
@@ -344,11 +581,32 @@ export class LibraryController {
   setPlaybackActive(active: boolean) {
     this.preparation.setPlaybackActive(active);
   }
-  /** The newest job for the current source content. */
+  /** The newest job of any kind for the current source content. */
   preparationFor(path: string, sourceSha256?: string) {
     const hash = sourceSha256 ?? this.analyzedSources.get(path);
     if (hash === null) return undefined;
     return this.preparation.jobFor(path, hash);
+  }
+  /** The job for the complete-source plan of the current analysis. */
+  wholePreparation(path: string, sourceSha256?: string) {
+    const hash = sourceSha256 ?? this.analyzedSources.get(path);
+    if (hash === null) return undefined;
+    const plan = this.state.analysis?.plan;
+    if (hash && this.state.analysis?.path === path && plan?.valid)
+      return this.preparation.jobForPlan(hash, plan.plan);
+    return this.preparation.jobFor(path, hash, true);
+  }
+  /** The job that the current review input produced. */
+  reviewPreparation() {
+    const review = this.state.review;
+    if (!review?.plan?.valid || !review.input.region) return undefined;
+    return this.preparation.jobForPlan(review.sourceSha256, review.plan.plan);
+  }
+  /** Section jobs for the current source content, newest first. */
+  sectionPreparations(path: string, sourceSha256: string) {
+    return this.preparation
+      .jobsFor(path, sourceSha256)
+      .filter((job) => job.plan.region !== null);
   }
   private addRow(path: string, handle: FileHandle) {
     if (this.state.catalog.rows.some((row) => row.path === path)) return;
@@ -614,6 +872,8 @@ export class LibraryController {
     this.task.abort();
     this.preparation.dispose();
     this.selectionTask?.abort();
+    this.reviewTask?.abort();
+    this.reviewSequence++;
     this.pairTask?.abort();
     this.selection++;
     this.pairSelection++;
@@ -625,6 +885,7 @@ export class LibraryController {
       tagsReadable: false,
       metadata: undefined,
       analysis: undefined,
+      review: undefined,
       pair: undefined,
       metadataMessage:
         "Source details will refresh after folder access returns.",
@@ -638,6 +899,8 @@ export class LibraryController {
     this.preparation.suspend();
     this.task.abort();
     this.selectionTask?.abort();
+    this.reviewTask?.abort();
+    this.reviewSequence++;
     this.pairTask?.abort();
     this.selection++;
     this.pairSelection++;

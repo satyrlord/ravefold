@@ -1,3 +1,4 @@
+import type { AudioAnalysis } from "../audio/analyze.ts";
 import type { AudioAnalysisReply } from "../audio/analyze-worker.ts";
 import type { PreparationStage } from "../audio/prepare-core.ts";
 import { workerRunner, type PreparationRunner } from "../audio/preparer.ts";
@@ -7,8 +8,10 @@ import {
   preparationJobId,
   preparedOutputPath,
   PREPARATION_PROCESSOR,
+  type PlanInput,
   type PreparationJob,
   type PreparationPhase,
+  type PreparationPlan,
 } from "../domain/preparation.ts";
 import { validateWav } from "../domain/wav.ts";
 import {
@@ -336,15 +339,43 @@ export class PreparationQueue {
     this.watchLeases();
   }
 
-  /** The newest job for source content, or for a path without a known hash. */
-  jobFor(path: string, sourceSha256?: string): PreparationJob | undefined {
+  /**
+   * The newest job for source content, or for a path without a known hash.
+   * With `whole`, only jobs that read the complete source without a
+   * correction qualify.
+   */
+  jobFor(
+    path: string,
+    sourceSha256?: string,
+    whole = false,
+  ): PreparationJob | undefined {
+    return this.jobsFor(path, sourceSha256).find(
+      (job) => !whole || (!job.plan.region && !job.plan.correction),
+    );
+  }
+
+  /** All jobs for source content, newest first. */
+  jobsFor(path: string, sourceSha256?: string): PreparationJob[] {
     return Object.values(this.state.jobs)
       .filter((job) =>
         sourceSha256
           ? job.source.sourceSha256 === sourceSha256
           : job.source.path === path,
       )
-      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  /** The job that equal source content and an equal plan produce. */
+  jobForPlan(
+    sourceSha256: string,
+    plan: PreparationPlan,
+  ): PreparationJob | undefined {
+    const key = JSON.stringify(plan);
+    return Object.values(this.state.jobs).find(
+      (job) =>
+        job.source.sourceSha256 === sourceSha256 &&
+        JSON.stringify(job.plan) === key,
+    );
   }
 
   /** A ready job that produced the file at this path. */
@@ -354,9 +385,20 @@ export class PreparationQueue {
     );
   }
 
-  /** Save the job before any processing starts. Equal jobs are not repeated. */
-  async prepare(path: string, reply: AudioAnalysisReply): Promise<string> {
-    const planned = planPreparation(reply.analysis, reply.info);
+  /**
+   * Save the job before any processing starts. Equal jobs are not repeated.
+   * A review gives the analysis of its corrected input and region.
+   */
+  async prepare(
+    path: string,
+    reply: AudioAnalysisReply,
+    review?: PlanInput & { analysis: AudioAnalysis },
+  ): Promise<string> {
+    const planned = planPreparation(
+      review?.analysis ?? reply.analysis,
+      reply.info,
+      review ?? {},
+    );
     if (!planned.valid) throw new Error(planned.reason);
     const id = await preparationJobId(reply.sourceSha256, planned.plan);
     await this.change((jobs) => {

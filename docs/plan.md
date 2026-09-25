@@ -1000,3 +1000,9 @@ changes duration at constant pitch. A resampler then changes pitch. The built-in
 pitch shift of the candidate did not meet the 5 cent criterion for low tones.
 The private research file records these measurements. Listening review, memory
 and combined-load results remain open.
+
+The user authorized spec-005 implementation on 2026-09-25. A user correction is
+a hypothesis for analysis. It can select one reading that the measurements
+support. It cannot change a detector limit. A selected region gives a new file
+only after analysis of the region and output validation. The correction policy
+stays a proposal until the product owner and audio developer review it.

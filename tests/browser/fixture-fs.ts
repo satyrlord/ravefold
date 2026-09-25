@@ -15,6 +15,7 @@ export interface FixtureOptions {
   library?: boolean;
   analysisSamples?: boolean;
   preparationSamples?: boolean;
+  reviewSamples?: boolean;
   sourceClaim?: "matching" | "mismatched";
   extraSamples?: number;
   sampleMetadata?: Record<string, string>;
@@ -441,6 +442,18 @@ export async function installFixtureFS(
           beat * 8,
           Array.from({ length: 8 }, (_, index) => index * beat),
         ),
+      );
+    }
+    if (configuration.reviewSamples) {
+      const review = samples.folder("Review");
+      review.file(
+        "ambiguous-180.wav",
+        phrase({ notes: [60, 63, 67, 68, 70, 67, 63, 60] }),
+      );
+      // C minor for four beats, then D major for four beats.
+      review.file(
+        "mixed-key.wav",
+        phrase({ notes: [60, 63, 67, 60, 62, 66, 69, 62] }),
       );
     }
     if (configuration.extraSamples) {

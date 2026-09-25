@@ -6,22 +6,16 @@ import { normalizeTags } from "../library/tags.ts";
 import { MaterialSurface } from "../skins/MaterialRoot.tsx";
 import { Button, Icon } from "./controls.tsx";
 import { PreparationPanel } from "./PreparationPanel.tsx";
+import {
+  draftFor,
+  draftRegion,
+  EMPTY_DRAFT,
+  inputSummary,
+  PITCH_NAMES,
+  ReviewPanel,
+  type ReviewDraft,
+} from "./ReviewPanel.tsx";
 import { TrackerIcon } from "./tracker-icons.tsx";
-
-const PITCH_NAMES = [
-  "C",
-  "C sharp",
-  "D",
-  "E flat",
-  "E",
-  "F",
-  "F sharp",
-  "G",
-  "A flat",
-  "A",
-  "B flat",
-  "B",
-] as const;
 
 export function SampleInspector({
   state,
@@ -43,6 +37,36 @@ export function SampleInspector({
   const [waveMessage, setWaveMessage] = useState("");
   const [waveBusy, setWaveBusy] = useState(false);
   const generation = useRef(0);
+  const review = state.review?.path === sample?.path ? state.review : undefined;
+  const sampleRate = analysis?.result?.info.sampleRate;
+  const reviewKey = review ? JSON.stringify(review.input) : "";
+  const [draft, setDraft] = useState<ReviewDraft>(EMPTY_DRAFT);
+  useEffect(() => {
+    setDraft(
+      review && sampleRate ? draftFor(review.input, sampleRate) : EMPTY_DRAFT,
+    );
+    // The draft follows the latest input that the user sent.
+  }, [state.selected, reviewKey, sampleRate]);
+  const overlay =
+    waveform && sampleRate && analysis?.result
+      ? (() => {
+          const draftValue = draftRegion(draft, sampleRate);
+          const region = "region" in draftValue ? draftValue.region : null;
+          const frames = analysis.result!.info.frames;
+          if (
+            !region ||
+            region.startFrame < 0 ||
+            region.endFrameExclusive > frames ||
+            region.endFrameExclusive <= region.startFrame
+          )
+            return null;
+          return {
+            x: (region.startFrame / frames) * 256,
+            width:
+              ((region.endFrameExclusive - region.startFrame) / frames) * 256,
+          };
+        })()
+      : null;
   useEffect(() => {
     generation.current++;
     preview.cancelWaveform();
@@ -78,7 +102,7 @@ export function SampleInspector({
   };
   const tags = sample ? controller.tags(sample.path) : [];
   const job = sample
-    ? controller.preparationFor(sample.path, analysis?.result?.sourceSha256)
+    ? controller.wholePreparation(sample.path, analysis?.result?.sourceSha256)
     : undefined;
   const preparedRow =
     job?.phase === "ready" && job.output
@@ -146,6 +170,15 @@ export function SampleInspector({
                 aria-label={`Source waveform: ${sample.path}`}
                 preserveAspectRatio="none"
               >
+                {overlay && (
+                  <rect
+                    className="waveform-region"
+                    x={overlay.x}
+                    y={0}
+                    width={Math.max(0.5, overlay.width)}
+                    height={100}
+                  />
+                )}
                 <path d="M0 50H256" className="waveform-baseline" />
                 {waveform.peaks.map((peak, i) => (
                   <path
@@ -306,8 +339,25 @@ export function SampleInspector({
                 ? `${analysis.result.declared.bpm} BPM, ${analysis.result.declared.key} from OG.`
                 : "Not recorded."}
             </p>
-            <p className="muted">User corrections: Not recorded.</p>
+            <p className="muted">
+              User corrections:{" "}
+              {review && review.status !== "invalid" && sampleRate
+                ? `${inputSummary(review.input, sampleRate)}.`
+                : "Not recorded."}
+            </p>
           </section>
+          {analysis?.result &&
+            (analysis.result.analysis.status !== "ready" || review) && (
+              <ReviewPanel
+                sample={sample}
+                analysis={analysis}
+                state={state}
+                controller={controller}
+                preview={preview}
+                draft={draft}
+                onDraft={setDraft}
+              />
+            )}
           <PreparationPanel
             sample={sample}
             analysis={analysis}

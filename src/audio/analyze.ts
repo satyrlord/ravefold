@@ -1,4 +1,8 @@
 import { nearestShiftToC } from "../domain/music.ts";
+import {
+  TEMPO_TOLERANCE_BPM,
+  type AnalysisCorrection,
+} from "../domain/review.ts";
 import type { DecodedWav } from "./pcm.ts";
 
 export const AUDIO_ANALYSIS_VERSION = "audio-analysis-v3" as const;
@@ -65,6 +69,8 @@ export interface AudioAnalysisContext {
   verifiedOfficialSource?: true;
   /** The target of a validated preparation job for this exact output file. */
   expectedBpm?: 90 | 180;
+  /** User hypotheses. They select only among measured readings. */
+  correction?: AnalysisCorrection;
 }
 
 interface PitchEstimate {
@@ -292,6 +298,36 @@ function otherMinorKey(
     },
     transposeSemitones: nearestShiftToC(root),
   };
+}
+
+/** Use a corrected root only when the notes establish a minor form on it. */
+function minorKeyAt(
+  classes: ReadonlySet<number>,
+  root: number,
+): Pick<AudioMeasurements, "sourceKey" | "transposeSemitones"> | null {
+  const form = minorForm(
+    new Set([...classes].map((pitchClass) => (pitchClass - root + 12) % 12)),
+  );
+  if (!form) return null;
+  return {
+    sourceKey: {
+      root,
+      minorForm: form,
+      pitchClasses: [...classes].sort((a, b) => a - b),
+    },
+    transposeSemitones: nearestShiftToC(root),
+  };
+}
+
+/** A supported tempo that a correction names, within the tempo tolerance. */
+function correctedSupportedBpm(
+  context: AudioAnalysisContext | undefined,
+): 90 | 180 | undefined {
+  const bpm = context?.correction?.bpm;
+  if (bpm === undefined) return undefined;
+  return ([90, 180] as const).find(
+    (supported) => Math.abs(bpm - supported) <= TEMPO_TOLERANCE_BPM,
+  );
 }
 
 function bestCompatibleSubset(classes: ReadonlySet<number>): Set<number> {
@@ -658,8 +694,11 @@ function periodicLoop(
   const first = candidates[0]!;
   const second = candidates[1]!;
   if (first.score < 0.45) return null;
+  const correctedBpm = correctedSupportedBpm(context);
   const preferredBpm =
-    context?.expectedBpm ?? (context?.verifiedOfficialSource ? 180 : undefined);
+    context?.expectedBpm ??
+    correctedBpm ??
+    (context?.verifiedOfficialSource ? 180 : undefined);
   const preferred = candidates.find(
     (candidate) => candidate.bpm === preferredBpm,
   );
@@ -677,6 +716,13 @@ function periodicLoop(
       "needs-review",
       "uncertain",
       "Measured rhythm does not support the prepared tempo.",
+      { rhythm: first.score, pitch: 0 },
+    );
+  if (correctedBpm && chosen.bpm !== correctedBpm)
+    return result(
+      "needs-review",
+      "uncertain",
+      "Measured rhythm does not support the corrected tempo.",
       { rhythm: first.score, pitch: 0 },
     );
   const resolved = Boolean(context?.verifiedOfficialSource || preferred);
@@ -1389,15 +1435,12 @@ function analyzeMeasuredAudio(
     );
   const estimatedBpm = Math.round((60 / beatSeconds) * 10) / 10;
   const scores = { rhythm: rhythmScore, pitch: 0 };
-  const supportedBpm = ([90, 180] as const).find(
-    (supported) => Math.abs(estimatedBpm - supported) <= 1.5,
+  let supportedBpm = ([90, 180] as const).find(
+    (supported) => Math.abs(estimatedBpm - supported) <= TEMPO_TOLERANCE_BPM,
   );
   const tempoIsReady = supportedBpm !== undefined;
-  const tempoFacts = {
-    bpm: supportedBpm ?? estimatedBpm,
-    estimatedBpm,
-    beatCount,
-  };
+  const correctedBpm = correctedSupportedBpm(context);
+  let gridBeats = beatCount;
   if (supportedBpm !== undefined) {
     const otherBpm = supportedBpm === 90 ? 180 : 90;
     const otherBeats = (duration * otherBpm) / 60;
@@ -1419,7 +1462,8 @@ function analyzeMeasuredAudio(
       );
       const resolved =
         context?.verifiedOfficialSource ||
-        context?.expectedBpm === supportedBpm;
+        context?.expectedBpm === supportedBpm ||
+        correctedBpm !== undefined;
       if (
         (supportedBpm === 180 && !resolved) ||
         (otherScore >= 0.45 && chosenScore - otherScore < 0.12 && !resolved)
@@ -1431,8 +1475,18 @@ function analyzeMeasuredAudio(
           { rhythm: Math.max(chosenScore, otherScore), pitch: 0 },
         );
       }
+      // The duration fits both grids. A correction selects the other reading.
+      if (correctedBpm === otherBpm) {
+        supportedBpm = otherBpm;
+        gridBeats = Math.round(otherBeats);
+      }
     }
   }
+  const tempoFacts = {
+    bpm: supportedBpm ?? estimatedBpm,
+    estimatedBpm,
+    beatCount: gridBeats,
+  };
   if (context?.verifiedOfficialSource && supportedBpm === 90)
     return result(
       "needs-review",
@@ -1473,7 +1527,11 @@ function analyzeMeasuredAudio(
     ? average(pitched.map((pitch) => pitch.score))
     : 0;
   if (!pitched.length) {
-    if (supportedBpm === 90 && context?.expectedBpm !== 90)
+    if (
+      supportedBpm === 90 &&
+      context?.expectedBpm !== 90 &&
+      correctedBpm !== 90
+    )
       return result(
         "needs-review",
         "uncertain",
@@ -1561,9 +1619,49 @@ function analyzeMeasuredAudio(
       : 1;
   });
   const tuned =
-    earlyToLate.filter((ratio) => ratio < 0.35).length >= beatCount * 0.75;
+    earlyToLate.filter((ratio) => ratio < 0.35).length >=
+    onsetBlocks.length * 0.75;
   const kind: AnalyzedSampleKind = tuned ? "tuned-percussion" : "tonal-loop";
   const facts = compatibleFacts(classes);
+  const correctedKey = context?.correction?.key;
+  if (correctedKey?.mode === "major")
+    return result(
+      "needs-review",
+      kind,
+      "Major material stays in review. Select a compatible minor section.",
+      scores,
+      tempoFacts,
+    );
+  if (correctedKey && correctedKey.root !== 0) {
+    // A pitch-class set cannot separate a minor key from its relative major.
+    // The corrected root selects one reading when its minor form is complete.
+    const transposition = minorKeyAt(classes, correctedKey.root);
+    if (!transposition)
+      return result(
+        "needs-review",
+        kind,
+        "The measured notes do not establish the corrected minor key.",
+        scores,
+        tempoFacts,
+      );
+    return result(
+      "needs-conversion",
+      kind,
+      tempoIsReady
+        ? "Measured notes in the corrected minor key need transposition to C minor."
+        : "Measured notes in the corrected minor key and loop tempo need conversion.",
+      scores,
+      { ...tempoFacts, ...transposition },
+    );
+  }
+  if (!facts && correctedKey)
+    return result(
+      "needs-review",
+      kind,
+      "The measured notes do not fit the corrected key.",
+      scores,
+      tempoFacts,
+    );
   if (!facts) {
     const transposition = otherMinorKey(
       classes,
@@ -1737,12 +1835,106 @@ function sourceBackedCompatibility(decoded: DecodedWav): AudioAnalysis | null {
   );
 }
 
+/** Keep tempo facts only. Other facts of a held result are not claims. */
+function heldForCorrection(analysis: AudioAnalysis, reason: string) {
+  const { sampleKind, bpm, estimatedBpm, beatCount, detectorScores } =
+    analysis.measured;
+  return {
+    algorithmVersion: AUDIO_ANALYSIS_VERSION,
+    status: "needs-review" as const,
+    measured: {
+      sampleKind: sampleKind.startsWith("source-backed-")
+        ? ("uncertain" as const)
+        : sampleKind,
+      ...(bpm !== undefined ? { bpm } : {}),
+      ...(estimatedBpm !== undefined ? { estimatedBpm } : {}),
+      ...(beatCount !== undefined ? { beatCount } : {}),
+      detectorScores,
+    },
+    reasons: [reason],
+  };
+}
+
+/**
+ * Hold a result that a correction contradicts. A correction never removes a
+ * measurement check, so an unresolved review result stays unchanged.
+ */
+function checkCorrection(
+  analysis: AudioAnalysis,
+  correction: AnalysisCorrection,
+): AudioAnalysis {
+  if (analysis.status === "needs-review")
+    return {
+      ...analysis,
+      reasons: [
+        ...analysis.reasons,
+        "The correction does not resolve this measured result.",
+      ].slice(0, 16),
+    };
+  const measured = analysis.measured;
+  const kind = measured.sampleKind;
+  const pitched = kind === "tonal-loop" || kind === "tuned-percussion";
+  const neutral = kind === "key-neutral-loop" || kind === "unpitched-one-shot";
+  if (correction.bpm !== undefined) {
+    if (measured.bpm === undefined)
+      return heldForCorrection(
+        analysis,
+        "A one-shot has no source tempo. The tempo correction does not apply.",
+      );
+    if (Math.abs(measured.bpm - correction.bpm) > TEMPO_TOLERANCE_BPM)
+      return heldForCorrection(
+        analysis,
+        "The corrected tempo does not agree with the measured attacks.",
+      );
+  }
+  if (correction.tonalClass === "key-neutral" && pitched)
+    return heldForCorrection(
+      analysis,
+      "Measured notes contradict the key-neutral correction.",
+    );
+  if (correction.tonalClass === "tonal" && neutral)
+    return heldForCorrection(
+      analysis,
+      "No stable notes were measured for the tonal correction.",
+    );
+  const key = correction.key;
+  if (key) {
+    if (neutral)
+      return heldForCorrection(
+        analysis,
+        "Key-neutral audio has no musical key. The key correction does not apply.",
+      );
+    if (key.mode === "major")
+      return heldForCorrection(
+        analysis,
+        "Major material stays in review. Select a compatible minor section.",
+      );
+    const root = measured.sourceKey?.root ?? 0;
+    if (key.root !== root)
+      return heldForCorrection(
+        analysis,
+        "The corrected key does not agree with the measured notes.",
+      );
+  }
+  return {
+    ...analysis,
+    reasons: [
+      ...analysis.reasons,
+      "The user correction agrees with the measured result.",
+    ].slice(0, 16),
+  };
+}
+
 export function analyzeAudio(
   decoded: DecodedWav,
   context?: AudioAnalysisContext,
 ): AudioAnalysis {
   const measured = analyzeMeasuredAudio(decoded, context);
-  if (!context?.verifiedOfficialSource || measured.status !== "needs-review")
-    return measured;
-  return sourceBackedCompatibility(decoded) ?? measured;
+  const combined =
+    !context?.verifiedOfficialSource || measured.status !== "needs-review"
+      ? measured
+      : (sourceBackedCompatibility(decoded) ?? measured);
+  return context?.correction
+    ? checkCorrection(combined, context.correction)
+    : combined;
 }

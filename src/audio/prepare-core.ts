@@ -3,10 +3,13 @@ import { decodeWav, type DecodedWav } from "./pcm.ts";
 import { stretchAudio } from "./stretch.ts";
 import { encodeFloatWav } from "./wav-encode.ts";
 import {
+  outputContext,
   planPreparation,
+  sourceContext,
   type PreparationMeasurements,
   type PreparationPlan,
 } from "../domain/preparation.ts";
+import { sliceRegion } from "../domain/review.ts";
 import type { WavInfo } from "../domain/wav.ts";
 
 /** A peak above +12 dBFS shows a processing fault, not source audio. */
@@ -114,28 +117,46 @@ export async function prepareAudio(
     throw new Error("The source changed after the job was saved.");
   const decoded = await decodeWav(new Blob([bytes]));
   await control.checkpoint();
-  const current = planPreparation(analyzeAudio(decoded), wavInfo(decoded));
+  // Analyze the selected region again before conversion, with the same input.
+  const input = plan.region ? sliceRegion(decoded, plan.region) : decoded;
+  const current = planPreparation(
+    analyzeAudio(input, sourceContext(plan)),
+    wavInfo(decoded),
+    { region: plan.region, correction: plan.correction },
+  );
   if (!current.valid || JSON.stringify(current.plan) !== JSON.stringify(plan))
     return {
       status: "review",
-      reasons: ["The current source analysis does not support this job."],
+      reasons: [
+        plan.region
+          ? "The current analysis of this section does not support this job."
+          : "The current source analysis does not support this job.",
+      ],
     };
   control.progress("conversion", 0);
-  const converted = await stretchAudio(
-    {
-      channels: decoded.channels,
-      sampleRate: decoded.sampleRate,
-      outputFrames: plan.outputFrames,
-      semitones: plan.semitones,
-      circular: true,
-    },
-    {
-      checkpoint: async (fraction) => {
-        control.progress("conversion", fraction);
-        await control.checkpoint();
-      },
-    },
-  );
+  // A ready region at its exact length needs a copy, not a conversion.
+  const converted =
+    plan.semitones === 0 && plan.outputFrames === input.frames
+      ? {
+          channels: input.channels,
+          stretchedFrames: input.frames,
+          latencyFrames: 0,
+        }
+      : await stretchAudio(
+          {
+            channels: input.channels,
+            sampleRate: input.sampleRate,
+            outputFrames: plan.outputFrames,
+            semitones: plan.semitones,
+            circular: true,
+          },
+          {
+            checkpoint: async (fraction) => {
+              control.progress("conversion", fraction);
+              await control.checkpoint();
+            },
+          },
+        );
   control.progress("validation", 0);
   let peak = 0;
   for (const channel of converted.channels)
@@ -157,7 +178,7 @@ export async function prepareAudio(
   );
   await control.checkpoint();
   const output = await decodeWav(new Blob([encoded]));
-  const analysis = analyzeAudio(output, { expectedBpm: plan.targetBpm });
+  const analysis = analyzeAudio(output, outputContext(plan));
   const reasons = outputReasons(plan, output, analysis);
   control.progress("validation", 1);
   if (reasons.length) return { status: "review", reasons };

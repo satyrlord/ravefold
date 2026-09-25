@@ -6,6 +6,12 @@ import type {
 import { nearestShiftToC } from "./music.ts";
 import type { WavInfo } from "./wav.ts";
 import { validateSamplePath } from "./project.ts";
+import {
+  regionProblem,
+  validCorrectedBpm,
+  type SourceRegion,
+  type TonalClass,
+} from "./review.ts";
 
 export const AUDIO_MANIFEST_FILENAME = "ravefold-analysis.manifest.json";
 export const MAX_AUDIO_MANIFEST_BYTES = 8 * 1024 * 1024;
@@ -21,9 +27,13 @@ export interface DeclaredAudio {
   key: string | null;
 }
 
+/** User input for a review, stored apart from declared and measured values. */
 export interface CorrectedAudio {
   bpm: number | null;
   key: string | null;
+  tonalClass?: TonalClass | null;
+  /** A selected section of the unchanged source. */
+  region?: SourceRegion | null;
 }
 
 export interface AudioRecord {
@@ -31,8 +41,14 @@ export interface AudioRecord {
   sourceBytes: number;
   wav: WavInfo;
   declared: DeclaredAudio | null;
+  /** The detector result without user corrections. */
   measured: AudioAnalysis;
   corrected: CorrectedAudio | null;
+  /**
+   * Validation of the corrected input. It analyzes the region when the
+   * correction has one. A region result never changes the source status.
+   */
+  reviewed?: AudioAnalysis;
 }
 
 export interface AudioManifest {
@@ -287,10 +303,36 @@ export function validateDeclaredAudio(value: unknown): DeclaredAudio | null {
   return { source: data.source, bpm: bpm(data.bpm), key: key(data.key) };
 }
 
+function region(value: unknown): SourceRegion {
+  const data = object(value, ["startFrame", "endFrameExclusive"]);
+  return {
+    startFrame: whole(data.startFrame, 0, "Region start"),
+    endFrameExclusive: whole(data.endFrameExclusive, 1, "Region end"),
+  };
+}
+
 export function validateCorrectedAudio(value: unknown): CorrectedAudio | null {
   if (value === null) return null;
-  const data = object(value, ["bpm", "key"]);
-  return { bpm: bpm(data.bpm), key: key(data.key) };
+  const data = object(value, ["bpm", "key"], ["tonalClass", "region"]);
+  const corrected = { bpm: bpm(data.bpm), key: key(data.key) };
+  if (corrected.bpm !== null && !validCorrectedBpm(corrected.bpm))
+    throw new Error("The corrected tempo is outside the supported range.");
+  if (
+    data.tonalClass !== undefined &&
+    data.tonalClass !== null &&
+    data.tonalClass !== "tonal" &&
+    data.tonalClass !== "key-neutral"
+  )
+    throw new Error("The corrected tonal class is invalid.");
+  if (data.tonalClass === "key-neutral" && corrected.key !== null)
+    throw new Error("A key-neutral correction cannot have a key.");
+  return {
+    ...corrected,
+    ...(data.tonalClass !== undefined ? { tonalClass: data.tonalClass } : {}),
+    ...(data.region !== undefined
+      ? { region: data.region === null ? null : region(data.region) }
+      : {}),
+  };
 }
 
 export function validateWavInfo(value: unknown): WavInfo {
@@ -531,14 +573,11 @@ function analysis(value: unknown): AudioAnalysis {
 }
 
 export function validateAudioRecord(value: unknown): AudioRecord {
-  const data = object(value, [
-    "sourceSha256",
-    "sourceBytes",
-    "wav",
-    "declared",
-    "measured",
-    "corrected",
-  ]);
+  const data = object(
+    value,
+    ["sourceSha256", "sourceBytes", "wav", "declared", "measured", "corrected"],
+    ["reviewed"],
+  );
   if (
     typeof data.sourceSha256 !== "string" ||
     !/^[0-9a-f]{64}$/u.test(data.sourceSha256)
@@ -573,13 +612,29 @@ export function validateAudioRecord(value: unknown): AudioRecord {
     )
       throw new Error("Source-backed evidence does not match the WAV file.");
   }
+  const corrected = validateCorrectedAudio(data.corrected);
+  if (corrected?.region) {
+    const problem = regionProblem(corrected.region, wav);
+    if (problem) throw new Error(problem);
+  }
+  let reviewed: AudioAnalysis | undefined;
+  if (data.reviewed !== undefined) {
+    reviewed = analysis(data.reviewed);
+    if (!corrected)
+      throw new Error("A review result needs the corrected input.");
+    // Review validation does not use a source record, so its result cannot
+    // be source-backed.
+    if (reviewed.measured.sampleKind.startsWith("source-backed-"))
+      throw new Error("A review result cannot be source-backed.");
+  }
   return {
     sourceSha256: data.sourceSha256,
     sourceBytes,
     wav,
     declared,
     measured,
-    corrected: validateCorrectedAudio(data.corrected),
+    corrected,
+    ...(reviewed ? { reviewed } : {}),
   };
 }
 

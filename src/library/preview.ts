@@ -23,10 +23,16 @@ export interface PreviewPlayback {
   stop(): void;
 }
 
+/** A part of the source to play, in seconds. */
+export interface PreviewSpan {
+  offset: number;
+  duration: number;
+}
+
 export interface PreviewBuffer {
   duration: number;
   channels: readonly Float32Array<ArrayBufferLike>[];
-  start(onEnded: () => void): PreviewPlayback;
+  start(onEnded: () => void, span?: PreviewSpan): PreviewPlayback;
 }
 
 export interface PreviewAudio {
@@ -54,7 +60,7 @@ function browserAudio(): PreviewAudio {
         channels: Array.from({ length: buffer.numberOfChannels }, (_, index) =>
           buffer.getChannelData(index),
         ),
-        start(onEnded) {
+        start(onEnded, span) {
           const source = context.createBufferSource();
           source.buffer = buffer;
           source.onended = () => {
@@ -63,7 +69,8 @@ function browserAudio(): PreviewAudio {
           };
           source.connect(context.destination);
           try {
-            source.start();
+            if (span) source.start(0, span.offset, span.duration);
+            else source.start();
           } catch (error) {
             source.disconnect();
             throw error;
@@ -128,8 +135,11 @@ export class SourcePreview {
     this.playback = undefined;
   }
 
-  /** Call directly from the user's preview command to retain audio activation. */
-  async play(sample: PreviewSample): Promise<void> {
+  /**
+   * Call directly from the user's preview command to retain audio activation.
+   * A span plays one section of the unchanged source.
+   */
+  async play(sample: PreviewSample, span?: PreviewSpan): Promise<void> {
     if (this.disposed) return;
     this.playAbort?.abort();
     const abort = new AbortController();
@@ -158,19 +168,28 @@ export class SourcePreview {
           "Audio access is suspended. Start source preview again.",
         );
       }
+      if (
+        span &&
+        (!(span.offset >= 0) ||
+          !(span.duration > 0) ||
+          span.offset + span.duration > buffer.duration + 1e-6)
+      )
+        throw new Error("The section is outside the source audio.");
       this.playback = buffer.start(() => {
         if (!current()) return;
         this.playback = undefined;
         this.publish({
           status: "idle",
           path: sample.path,
-          message: "Source preview ended.",
+          message: span ? "Section preview ended." : "Source preview ended.",
         });
-      });
+      }, span);
       this.publish({
         status: "playing",
         path: sample.path,
-        message: "Source preview is playing.",
+        message: span
+          ? "Section preview is playing."
+          : "Source preview is playing.",
       });
     } catch (error) {
       if (!current()) return;

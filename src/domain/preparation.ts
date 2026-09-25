@@ -1,11 +1,23 @@
-import type { AudioAnalysis } from "../audio/analyze.ts";
-import { validateAudioRecord, validateWavInfo } from "./audio-manifest.ts";
+import type { AudioAnalysis, AudioAnalysisContext } from "../audio/analyze.ts";
+import {
+  validateAudioRecord,
+  validateCorrectedAudio,
+  validateWavInfo,
+} from "./audio-manifest.ts";
 import {
   nearestSupportedBpm,
   SUPPORTED_BPMS,
   type SupportedBpm,
 } from "./music.ts";
 import { validateSamplePath } from "./project.ts";
+import {
+  parseKeyName,
+  regionProblem,
+  TEMPO_TOLERANCE_BPM,
+  type AnalysisCorrection,
+  type SourceRegion,
+  type TonalClass,
+} from "./review.ts";
 import type { WavInfo } from "./wav.ts";
 
 export const PREPARATION_MANIFEST_FILENAME =
@@ -39,6 +51,60 @@ export interface PreparationPlan {
   loop: boolean;
   /** Compatible C-minor pitch classes that the output must measure. */
   expectedPitchClasses: number[] | null;
+  /** The source section that the job reads. Null means the complete source. */
+  region: SourceRegion | null;
+  /** The user corrections that the analysis used for this plan. */
+  correction: PlanCorrection | null;
+}
+
+/** Corrections for a plan. The region is a separate plan field. */
+export interface PlanCorrection {
+  bpm: number | null;
+  key: string | null;
+  tonalClass: TonalClass | null;
+}
+
+export interface PlanInput {
+  region?: SourceRegion | null;
+  correction?: PlanCorrection | null;
+}
+
+/** Give the analysis hypotheses for a plan correction. */
+export function analysisCorrection(
+  correction: PlanCorrection | null,
+): AnalysisCorrection | undefined {
+  if (!correction) return undefined;
+  const key = correction.key === null ? null : parseKeyName(correction.key);
+  const result: AnalysisCorrection = {
+    ...(correction.bpm !== null ? { bpm: correction.bpm } : {}),
+    ...(correction.tonalClass !== null
+      ? { tonalClass: correction.tonalClass }
+      : {}),
+    ...(key ? { key } : {}),
+  };
+  return Object.keys(result).length ? result : undefined;
+}
+
+/** Analysis context for the source or region that a job reads. */
+export function sourceContext(plan: PreparationPlan): AudioAnalysisContext {
+  const correction = analysisCorrection(plan.correction);
+  return correction ? { correction } : {};
+}
+
+/**
+ * Analysis context for output validation. A corrected tempo that selected one
+ * measured reading applies again. No other correction applies to output.
+ */
+export function outputContext(plan: PreparationPlan): AudioAnalysisContext {
+  const bpm = plan.correction?.bpm;
+  return {
+    expectedBpm: plan.targetBpm,
+    ...(bpm !== null &&
+    bpm !== undefined &&
+    Math.abs(bpm - plan.targetBpm) <= TEMPO_TOLERANCE_BPM
+      ? { correction: { bpm: plan.targetBpm } }
+      : {}),
+  };
 }
 
 export type PreparationPhase =
@@ -111,24 +177,45 @@ export interface PreparationManifest {
 export type PlanResult =
   { valid: true; plan: PreparationPlan } | { valid: false; reason: string };
 
-/** Select tempo and pitch changes from measured values only. */
+/**
+ * Select tempo and pitch changes from measured values only. For a region, the
+ * analysis is of the region audio. A ready region still needs a new file.
+ */
 export function planPreparation(
   analysis: AudioAnalysis,
   wav: WavInfo,
+  input: PlanInput = {},
 ): PlanResult {
   const fail = (reason: string): PlanResult => ({ valid: false, reason });
+  const region = input.region ?? null;
+  const correction = input.correction ?? null;
   const measured = analysis.measured;
-  if (analysis.status === "ready")
+  if (region) {
+    const problem = regionProblem(region, wav);
+    if (problem) return fail(problem);
+  }
+  if (analysis.status === "ready" && !region)
     return fail("This sample is ready. It needs no conversion.");
-  if (analysis.status !== "needs-conversion")
-    return fail("This sample needs review. Preparation cannot resolve it.");
+  if (analysis.status === "needs-review")
+    return fail(
+      region
+        ? "This section needs review. It cannot be prepared."
+        : "This sample needs review. Preparation cannot resolve it.",
+    );
   const kind = measured.sampleKind;
   if (
     kind !== "key-neutral-loop" &&
     kind !== "tonal-loop" &&
     kind !== "tuned-percussion"
   )
-    return fail("Only measured loops can be prepared.");
+    return fail(
+      region
+        ? "Only measured loop sections can be prepared."
+        : "Only measured loops can be prepared.",
+    );
+  const frames = region
+    ? region.endFrameExclusive - region.startFrame
+    : wav.frames;
   const bpm = measured.bpm;
   const beatCount = measured.beatCount;
   if (
@@ -158,9 +245,9 @@ export function planPreparation(
   const outputFrames = Math.round(
     (beatCount * 60 * wav.sampleRate) / targetBpm,
   );
-  if (outputFrames === wav.frames && semitones === 0)
+  if (!region && outputFrames === frames && semitones === 0)
     return fail("This sample needs no tempo or pitch change.");
-  const ratio = (outputFrames * 2 ** (semitones / 12)) / wav.frames;
+  const ratio = (outputFrames * 2 ** (semitones / 12)) / frames;
   if (ratio < MIN_STRETCH_RATIO || ratio > MAX_STRETCH_RATIO)
     return fail("The tempo change is outside the supported conversion range.");
   return {
@@ -173,10 +260,13 @@ export function planPreparation(
       semitones,
       sampleRate: wav.sampleRate,
       channels: wav.channels,
-      inputFrames: wav.frames,
+      inputFrames: frames,
       outputFrames,
-      loop: wav.loop !== undefined,
+      // Source loop markers cover the complete source, not a region.
+      loop: !region && wav.loop !== undefined,
       expectedPitchClasses,
+      region: region ? { ...region } : null,
+      correction: correction ? { ...correction } : null,
     },
   };
 }
@@ -192,14 +282,20 @@ export async function preparationJobId(
   sourceSha256: string,
   plan: PreparationPlan,
 ): Promise<string> {
+  const region = plan.region ?? {
+    startFrame: 0,
+    endFrameExclusive: plan.inputFrames,
+  };
   const key = [
     sourceSha256,
-    `0-${plan.inputFrames}`,
+    `${region.startFrame}-${region.endFrameExclusive}`,
     plan.targetBpm,
     plan.beatCount,
     plan.semitones,
     plan.outputFrames,
     PREPARATION_PROCESSOR,
+    // Jobs without a correction keep their earlier IDs.
+    ...(plan.correction ? [JSON.stringify(plan.correction)] : []),
   ].join("\u0000");
   return hex(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)),
@@ -217,12 +313,16 @@ export function preparedOutputPath(
   const pitch = plan.semitones
     ? ` ${plan.semitones > 0 ? "+" : ""}${plan.semitones} st`
     : "";
+  const seconds = (frame: number) => (frame / plan.sampleRate).toFixed(3);
+  const section = plan.region
+    ? ` section ${seconds(plan.region.startFrame)}-${seconds(plan.region.endFrameExclusive)} s`
+    : "";
   const suffix = index === 1 ? "" : ` (${index})`;
   return validateSamplePath(
     [
       PREPARED_FOLDER,
       ...segments,
-      `${stem} ${plan.targetBpm} BPM${pitch}${suffix}.wav`,
+      `${stem}${section} ${plan.targetBpm} BPM${pitch}${suffix}.wav`,
     ].join("/"),
   );
 }
@@ -230,16 +330,43 @@ export function preparedOutputPath(
 function object(
   value: unknown,
   keys: readonly string[],
+  optional: readonly string[] = [],
 ): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error("Preparation metadata must be an object.");
   const data = value as Record<string, unknown>;
   if (
-    Object.keys(data).length !== keys.length ||
-    Object.keys(data).some((key) => !keys.includes(key))
+    keys.some((key) => !Object.hasOwn(data, key)) ||
+    Object.keys(data).some(
+      (key) => !keys.includes(key) && !optional.includes(key),
+    )
   )
     throw new Error("Preparation metadata has missing or unsupported fields.");
   return data;
+}
+
+function planRegion(value: unknown): SourceRegion | null {
+  if (value === undefined || value === null) return null;
+  const data = object(value, ["startFrame", "endFrameExclusive"]);
+  return {
+    startFrame: whole(data.startFrame, 0, "Region start"),
+    endFrameExclusive: whole(data.endFrameExclusive, 1, "Region end"),
+  };
+}
+
+function planCorrection(value: unknown): PlanCorrection | null {
+  if (value === undefined || value === null) return null;
+  const data = object(value, ["bpm", "key", "tonalClass"]);
+  const corrected = validateCorrectedAudio(data);
+  if (!corrected) throw new Error("The plan correction is invalid.");
+  const result = {
+    bpm: corrected.bpm,
+    key: corrected.key,
+    tonalClass: corrected.tonalClass ?? null,
+  };
+  if (!analysisCorrection(result))
+    throw new Error("A plan correction needs at least one value.");
+  return result;
 }
 
 function whole(value: unknown, minimum: number, label: string): number {
@@ -287,19 +414,24 @@ function pitchClasses(value: unknown): number[] | null {
 }
 
 export function validatePreparationPlan(value: unknown): PreparationPlan {
-  const data = object(value, [
-    "sampleKind",
-    "sourceBpm",
-    "targetBpm",
-    "beatCount",
-    "semitones",
-    "sampleRate",
-    "channels",
-    "inputFrames",
-    "outputFrames",
-    "loop",
-    "expectedPitchClasses",
-  ]);
+  // Plans from the first preparation release have no region or correction.
+  const data = object(
+    value,
+    [
+      "sampleKind",
+      "sourceBpm",
+      "targetBpm",
+      "beatCount",
+      "semitones",
+      "sampleRate",
+      "channels",
+      "inputFrames",
+      "outputFrames",
+      "loop",
+      "expectedPitchClasses",
+    ],
+    ["region", "correction"],
+  );
   const kind = data.sampleKind;
   if (
     kind !== "key-neutral-loop" &&
@@ -332,6 +464,16 @@ export function validatePreparationPlan(value: unknown): PreparationPlan {
   const expected = pitchClasses(data.expectedPitchClasses);
   if ((kind === "key-neutral-loop") !== (expected === null))
     throw new Error("Only tonal material has expected pitch classes.");
+  const region = planRegion(data.region);
+  if (
+    region &&
+    (region.endFrameExclusive - region.startFrame !== inputFrames ||
+      data.loop !== false)
+  )
+    throw new Error("The plan region does not match its input.");
+  const correction = planCorrection(data.correction);
+  if (kind === "key-neutral-loop" && correction?.key)
+    throw new Error("A key-neutral plan cannot have a corrected key.");
   return {
     sampleKind: kind,
     sourceBpm,
@@ -344,6 +486,8 @@ export function validatePreparationPlan(value: unknown): PreparationPlan {
     outputFrames,
     loop: data.loop,
     expectedPitchClasses: expected,
+    region,
+    correction,
   };
 }
 
@@ -441,10 +585,12 @@ export function validatePreparationJob(value: unknown): PreparationJob {
   const input = source(data.source);
   const plan = validatePreparationPlan(data.plan);
   if (
-    input.wav.frames !== plan.inputFrames ||
     input.wav.sampleRate !== plan.sampleRate ||
     input.wav.channels !== plan.channels ||
-    (input.wav.loop !== undefined) !== plan.loop
+    (plan.region
+      ? regionProblem(plan.region, input.wav) !== null
+      : input.wav.frames !== plan.inputFrames ||
+        (input.wav.loop !== undefined) !== plan.loop)
   )
     throw new Error("The preparation plan does not match its source.");
   if (data.processor !== PREPARATION_PROCESSOR)
